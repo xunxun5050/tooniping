@@ -1,0 +1,18 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: webtoon-hub-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: webtoon_hub
+      MYSQL_USER: webtoon
+      MYSQL_PASSWORD: webtoon
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:

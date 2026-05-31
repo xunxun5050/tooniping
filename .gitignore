@@ -1,0 +1,32 @@
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+.next/
+out/
+.pnpm-store/
+*.tsbuildinfo
+
+# Java
+*.class
+*.log
+.gradle/
+build/
+target/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Env
+.env
+.env.*
+
+# Local assets
+backend/storage/
+backend/data/
+backend/.m2/
+backend/.jdks/
+.tools/

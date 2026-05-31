@@ -1,0 +1,116 @@
+CREATE TABLE IF NOT EXISTS platforms (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    base_url VARCHAR(500) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS webtoons (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    platform_id BIGINT NOT NULL,
+    external_id VARCHAR(100),
+    title VARCHAR(255) NOT NULL,
+    author VARCHAR(255),
+    description TEXT,
+    original_url VARCHAR(1000) NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    is_adult BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    last_crawled_at DATETIME,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT fk_webtoons_platform
+        FOREIGN KEY (platform_id) REFERENCES platforms(id),
+    CONSTRAINT uk_webtoons_platform_external
+        UNIQUE (platform_id, external_id),
+    CONSTRAINT uk_webtoons_platform_url
+        UNIQUE (platform_id, original_url)
+);
+
+CREATE TABLE IF NOT EXISTS genres (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    sort_order INT NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS webtoon_genres (
+    webtoon_id BIGINT NOT NULL,
+    genre_id BIGINT NOT NULL,
+    created_at DATETIME NOT NULL,
+    PRIMARY KEY (webtoon_id, genre_id),
+    CONSTRAINT fk_webtoon_genres_webtoon
+        FOREIGN KEY (webtoon_id) REFERENCES webtoons(id),
+    CONSTRAINT fk_webtoon_genres_genre
+        FOREIGN KEY (genre_id) REFERENCES genres(id)
+);
+
+CREATE TABLE IF NOT EXISTS weekdays (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(30) NOT NULL UNIQUE,
+    name VARCHAR(50) NOT NULL,
+    sort_order INT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS webtoon_weekdays (
+    webtoon_id BIGINT NOT NULL,
+    weekday_id BIGINT NOT NULL,
+    created_at DATETIME NOT NULL,
+    PRIMARY KEY (webtoon_id, weekday_id),
+    CONSTRAINT fk_webtoon_weekdays_webtoon
+        FOREIGN KEY (webtoon_id) REFERENCES webtoons(id),
+    CONSTRAINT fk_webtoon_weekdays_weekday
+        FOREIGN KEY (weekday_id) REFERENCES weekdays(id)
+);
+
+CREATE TABLE IF NOT EXISTS webtoon_images (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    webtoon_id BIGINT NOT NULL,
+    image_type VARCHAR(30) NOT NULL,
+    source_url VARCHAR(1000),
+    stored_path VARCHAR(1000),
+    file_name VARCHAR(255),
+    content_type VARCHAR(100),
+    file_size BIGINT,
+    is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT fk_webtoon_images_webtoon
+        FOREIGN KEY (webtoon_id) REFERENCES webtoons(id)
+);
+
+CREATE TABLE IF NOT EXISTS crawl_histories (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    platform_id BIGINT NOT NULL,
+    crawl_type VARCHAR(30) NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    total_count INT NOT NULL DEFAULT 0,
+    success_count INT NOT NULL DEFAULT 0,
+    fail_count INT NOT NULL DEFAULT 0,
+    started_at DATETIME NOT NULL,
+    ended_at DATETIME,
+    message TEXT,
+    created_at DATETIME NOT NULL,
+    CONSTRAINT fk_crawl_histories_platform
+        FOREIGN KEY (platform_id) REFERENCES platforms(id)
+);
+
+CREATE TABLE IF NOT EXISTS crawl_failures (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    crawl_history_id BIGINT NOT NULL,
+    target_url VARCHAR(1000),
+    external_id VARCHAR(100),
+    title VARCHAR(255),
+    error_type VARCHAR(100),
+    error_message TEXT,
+    retry_count INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    CONSTRAINT fk_crawl_failures_history
+        FOREIGN KEY (crawl_history_id) REFERENCES crawl_histories(id)
+);
