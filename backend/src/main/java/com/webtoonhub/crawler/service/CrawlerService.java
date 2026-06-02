@@ -12,6 +12,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -28,8 +29,12 @@ import org.springframework.web.client.RestClient;
 public class CrawlerService {
 
     private static final String NAVER_PLATFORM_CODE = "NAVER_WEBTOON";
+    private static final String KAKAO_PLATFORM_CODE = "KAKAO_WEBTOON";
     private static final String NAVER_WEEKDAY_API_URL = "https://comic.naver.com/api/webtoon/titlelist/weekday?order=user";
     private static final String NAVER_GENRE_API_URL_TEMPLATE = "https://comic.naver.com/api/webtoon/titlelist/genre?genre=%s&order=user&page=%d";
+    private static final String KAKAO_TIMETABLE_API_URL_TEMPLATE = "https://gateway-kw.kakao.com/section/v2/timetables/days?placement=%s";
+    private static final String NAVER_BASE_URL = "https://comic.naver.com";
+    private static final String KAKAO_BASE_URL = "https://webtoon.kakao.com";
 
     private static final String STATUS_RUNNING = "RUNNING";
     private static final String STATUS_SUCCESS = "SUCCESS";
@@ -51,6 +56,34 @@ public class CrawlerService {
         new GenreFetchPlan("THRILL", "THRILLER"),
         new GenreFetchPlan("HISTORICAL", "HISTORICAL"),
         new GenreFetchPlan("SENSIBILITY", "SENSIBILITY")
+    );
+
+    private static final List<KakaoTimetableFetchPlan> KAKAO_TIMETABLE_FETCH_PLANS = List.of(
+        new KakaoTimetableFetchPlan("timetable_mon", "MONDAY", false),
+        new KakaoTimetableFetchPlan("timetable_tue", "TUESDAY", false),
+        new KakaoTimetableFetchPlan("timetable_wed", "WEDNESDAY", false),
+        new KakaoTimetableFetchPlan("timetable_thu", "THURSDAY", false),
+        new KakaoTimetableFetchPlan("timetable_fri", "FRIDAY", false),
+        new KakaoTimetableFetchPlan("timetable_sat", "SATURDAY", false),
+        new KakaoTimetableFetchPlan("timetable_sun", "SUNDAY", false),
+        new KakaoTimetableFetchPlan("timetable_new", null, false),
+        new KakaoTimetableFetchPlan("timetable_completed", null, true)
+    );
+
+    private static final Map<String, List<String>> KAKAO_GENRE_CODE_MAP = Map.of(
+        "ACTION_WUXIA", List.of("ACTION", "HISTORICAL"),
+        "COMIC_EVERYDAY_LIFE", List.of("COMEDY", "DAILY"),
+        "DRAMA", List.of("DRAMA"),
+        "FANTASY_DRAMA", List.of("FANTASY", "DRAMA"),
+        "HORROR_THRILLER", List.of("THRILLER"),
+        "ROMANCE", List.of("ROMANCE"),
+        "ROMANCE_FANTASY", List.of("ROMANCE", "FANTASY"),
+        "SCHOOL_ACTION_FANTASY", List.of("ACTION", "FANTASY")
+    );
+
+    private static final List<PlatformReference> PLATFORM_REFERENCES = List.of(
+        new PlatformReference(NAVER_PLATFORM_CODE, "네이버 웹툰", NAVER_BASE_URL),
+        new PlatformReference(KAKAO_PLATFORM_CODE, "카카오 웹툰", KAKAO_BASE_URL)
     );
 
     private static final List<GenreReference> GENRE_REFERENCES = List.of(
@@ -91,11 +124,19 @@ public class CrawlerService {
     }
 
     public CrawlRunResponseDto runInitialCrawler() {
-        return runCrawler("INITIAL");
+        return runCrawler("INITIAL", CrawlerTarget.NAVER);
     }
 
     public CrawlRunResponseDto runWeeklyCrawler() {
-        return runCrawler("WEEKLY_UPDATE");
+        return runCrawler("WEEKLY_UPDATE", CrawlerTarget.NAVER);
+    }
+
+    public CrawlRunResponseDto runKakaoInitialCrawler() {
+        return runCrawler("INITIAL", CrawlerTarget.KAKAO);
+    }
+
+    public CrawlRunResponseDto runKakaoWeeklyCrawler() {
+        return runCrawler("WEEKLY_UPDATE", CrawlerTarget.KAKAO);
     }
 
     public PagedResultDto<CrawlHistoryDto> getCrawlHistories(int page, int size) {
@@ -186,15 +227,18 @@ public class CrawlerService {
         return rows.get(0);
     }
 
-    private CrawlRunResponseDto runCrawler(String crawlType) {
+    private CrawlRunResponseDto runCrawler(String crawlType, CrawlerTarget target) {
         ensureReferenceData();
 
-        Long platformId = getNaverPlatformId();
+        Long platformId = getPlatformId(target.platformCode());
         long crawlHistoryId = createCrawlHistory(platformId, crawlType);
         LocalDateTime startedAt = LocalDateTime.now();
 
         try {
-            CrawlCollectionResult collectionResult = collectNaverWebtoons();
+            CrawlCollectionResult collectionResult = switch (target) {
+                case NAVER -> collectNaverWebtoons();
+                case KAKAO -> collectKakaoWebtoons();
+            };
             PersistResult persistResult = persistWebtoons(
                 platformId,
                 crawlHistoryId,
@@ -204,7 +248,8 @@ public class CrawlerService {
 
             String finalStatus = persistResult.failCount() > 0 ? STATUS_PARTIAL_SUCCESS : STATUS_SUCCESS;
             String message = String.format(
-                "네이버 웹툰 적재 완료: 총 %d건, 성공 %d건(신규 %d/수정 %d), 실패 %d건",
+                "%s 적재 완료: 총 %d건, 성공 %d건(신규 %d/수정 %d), 실패 %d건",
+                target.displayName(),
                 persistResult.totalCount(),
                 persistResult.successCount(),
                 persistResult.insertedCount(),
@@ -231,7 +276,7 @@ public class CrawlerService {
             );
         } catch (Exception exception) {
             String errorMessage = trimErrorMessage(exception);
-            String message = "네이버 웹툰 크롤링 실패: " + errorMessage;
+            String message = target.displayName() + " 크롤링 실패: " + errorMessage;
 
             updateCrawlHistory(crawlHistoryId, STATUS_FAILED, 0, 0, 0, message);
             throw new IllegalStateException(message, exception);
@@ -322,7 +367,7 @@ public class CrawlerService {
                 }
 
                 CrawlWebtoon webtoon = webtoonsByExternalId.computeIfAbsent(externalId, CrawlWebtoon::new);
-                webtoon.mergeBaseInfo(node);
+                webtoon.mergeNaverBaseInfo(node, buildNaverWebtoonUrl(externalId));
                 webtoon.weekdayCodes().add(weekdayCode);
             }
         }
@@ -364,12 +409,127 @@ public class CrawlerService {
             }
 
             CrawlWebtoon webtoon = webtoonsByExternalId.computeIfAbsent(externalId, CrawlWebtoon::new);
-            webtoon.mergeBaseInfo(node);
+            webtoon.mergeNaverBaseInfo(node, buildNaverWebtoonUrl(externalId));
             if (genreCode != null) {
                 webtoon.genreCodes().add(genreCode);
             }
             if (weekdayCode != null) {
                 webtoon.weekdayCodes().add(weekdayCode);
+            }
+        }
+    }
+
+    private CrawlCollectionResult collectKakaoWebtoons() {
+        Map<String, CrawlWebtoon> webtoonsByExternalId = new LinkedHashMap<>();
+        List<CrawlFailureInput> collectionFailures = new ArrayList<>();
+
+        for (KakaoTimetableFetchPlan plan : KAKAO_TIMETABLE_FETCH_PLANS) {
+            String targetUrl = KAKAO_TIMETABLE_API_URL_TEMPLATE.formatted(plan.placement());
+            try {
+                JsonNode response = fetchJson(targetUrl);
+                mergeKakaoTimetable(response, targetUrl, plan, webtoonsByExternalId, collectionFailures);
+            } catch (Exception exception) {
+                collectionFailures.add(new CrawlFailureInput(
+                    targetUrl,
+                    null,
+                    null,
+                    exception.getClass().getSimpleName(),
+                    trimErrorMessage(exception)
+                ));
+            }
+        }
+
+        applyDerivedWeekdayMappings(webtoonsByExternalId.values());
+        return new CrawlCollectionResult(webtoonsByExternalId, collectionFailures);
+    }
+
+    private void mergeKakaoTimetable(
+        JsonNode response,
+        String targetUrl,
+        KakaoTimetableFetchPlan plan,
+        Map<String, CrawlWebtoon> webtoonsByExternalId,
+        List<CrawlFailureInput> failures
+    ) {
+        JsonNode sections = response.path("data");
+        if (!sections.isArray()) {
+            failures.add(new CrawlFailureInput(
+                targetUrl,
+                null,
+                null,
+                "INVALID_PAYLOAD",
+                "data 배열을 찾지 못했습니다."
+            ));
+            return;
+        }
+
+        for (JsonNode section : sections) {
+            JsonNode cardGroups = section.path("cardGroups");
+            if (!cardGroups.isArray()) {
+                continue;
+            }
+
+            for (JsonNode cardGroup : cardGroups) {
+                JsonNode cards = cardGroup.path("cards");
+                if (!cards.isArray()) {
+                    continue;
+                }
+
+                for (JsonNode card : cards) {
+                    mergeKakaoCard(card, targetUrl, plan, webtoonsByExternalId, failures);
+                }
+            }
+        }
+    }
+
+    private void mergeKakaoCard(
+        JsonNode card,
+        String targetUrl,
+        KakaoTimetableFetchPlan plan,
+        Map<String, CrawlWebtoon> webtoonsByExternalId,
+        List<CrawlFailureInput> failures
+    ) {
+        JsonNode content = card.path("content");
+        String externalId = trimToNull(content.path("id").asText(null));
+        String title = trimToNull(content.path("title").asText(null));
+
+        if (externalId == null || title == null) {
+            failures.add(new CrawlFailureInput(
+                targetUrl,
+                externalId,
+                title,
+                "INVALID_PAYLOAD",
+                "카카오 timetable 작품의 id/title이 비어 있어 스킵했습니다."
+            ));
+            return;
+        }
+
+        CrawlWebtoon webtoon = webtoonsByExternalId.computeIfAbsent(externalId, CrawlWebtoon::new);
+        webtoon.mergeKakaoBaseInfo(
+            title,
+            joinKakaoAuthors(content.path("authors")),
+            trimToNull(content.path("catchphraseTwoLines").asText(null)),
+            normalizeKakaoImageUrl(firstNonBlank(
+                content.path("featuredCharacterImageA").asText(null),
+                content.path("featuredCharacterImageB").asText(null),
+                content.path("backgroundImage").asText(null),
+                content.path("titleImageA").asText(null)
+            )),
+            buildKakaoWebtoonUrl(externalId, content.path("seoId").asText(null), title),
+            content.path("adult").asBoolean(false) || card.path("additional").path("adult").asBoolean(false)
+        );
+
+        if (plan.completed()) {
+            webtoon.markCompleted();
+        } else if (plan.weekdayCode() != null) {
+            webtoon.weekdayCodes().add(plan.weekdayCode());
+        }
+
+        JsonNode genreFilters = card.path("genreFilters");
+        if (genreFilters.isArray()) {
+            for (JsonNode genreFilter : genreFilters) {
+                for (String dbGenreCode : mapKakaoGenreCodes(genreFilter.asText(null))) {
+                    webtoon.genreCodes().add(dbGenreCode);
+                }
             }
         }
     }
@@ -442,7 +602,7 @@ public class CrawlerService {
             } catch (Exception exception) {
                 failCount++;
                 saveCrawlFailure(crawlHistoryId, new CrawlFailureInput(
-                    buildWebtoonUrl(webtoon.externalId()),
+                    webtoon.originalUrl(),
                     webtoon.externalId(),
                     webtoon.title(),
                     exception.getClass().getSimpleName(),
@@ -451,7 +611,9 @@ public class CrawlerService {
             }
         }
 
-        deactivateMissingWebtoons(platformId, crawledExternalIds);
+        if (collectionFailures.isEmpty()) {
+            deactivateMissingWebtoons(platformId, crawledExternalIds);
+        }
         return new PersistResult(totalCount, insertedCount, updatedCount, successCount, failCount);
     }
 
@@ -515,7 +677,7 @@ public class CrawlerService {
             .addValue("title", webtoon.title())
             .addValue("author", webtoon.author())
             .addValue("description", webtoon.description())
-            .addValue("originalUrl", buildWebtoonUrl(webtoon.externalId()))
+            .addValue("originalUrl", webtoon.originalUrl())
             .addValue("status", webtoon.status())
             .addValue("isAdult", webtoon.adult()), keyHolder, new String[]{"id"});
 
@@ -546,7 +708,7 @@ public class CrawlerService {
             .addValue("title", webtoon.title())
             .addValue("author", webtoon.author())
             .addValue("description", webtoon.description())
-            .addValue("originalUrl", buildWebtoonUrl(webtoon.externalId()))
+            .addValue("originalUrl", webtoon.originalUrl())
             .addValue("status", webtoon.status())
             .addValue("isAdult", webtoon.adult()));
     }
@@ -769,8 +931,27 @@ public class CrawlerService {
     }
 
     private void ensureReferenceData() {
+        ensurePlatformReferences();
         ensureGenreReferences();
         ensureWeekdayReferences();
+    }
+
+    private void ensurePlatformReferences() {
+        Map<String, Long> existing = loadCodeIdMap("platforms");
+        String sql = """
+            INSERT INTO platforms (code, name, base_url, is_active, created_at, updated_at)
+            VALUES (:code, :name, :baseUrl, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """;
+
+        for (PlatformReference reference : PLATFORM_REFERENCES) {
+            if (existing.containsKey(reference.code())) {
+                continue;
+            }
+            jdbc.update(sql, new MapSqlParameterSource()
+                .addValue("code", reference.code())
+                .addValue("name", reference.name())
+                .addValue("baseUrl", reference.baseUrl()));
+        }
     }
 
     private void ensureGenreReferences() {
@@ -820,14 +1001,14 @@ public class CrawlerService {
         return result;
     }
 
-    private Long getNaverPlatformId() {
+    private Long getPlatformId(String platformCode) {
         String sql = "SELECT id FROM platforms WHERE code = :platformCode";
         List<Long> ids = jdbc.query(sql,
-            new MapSqlParameterSource("platformCode", NAVER_PLATFORM_CODE),
+            new MapSqlParameterSource("platformCode", platformCode),
             (rs, rowNum) -> rs.getLong("id"));
 
         if (ids.isEmpty()) {
-            throw new IllegalStateException("NAVER_WEBTOON 플랫폼이 없습니다.");
+            throw new IllegalStateException(platformCode + " 플랫폼이 없습니다.");
         }
         return ids.get(0);
     }
@@ -854,8 +1035,85 @@ public class CrawlerService {
         return text;
     }
 
-    private String buildWebtoonUrl(String externalId) {
-        return "https://comic.naver.com/webtoon/list?titleId=" + externalId;
+    private List<String> mapKakaoGenreCodes(String kakaoGenreCode) {
+        String normalized = trimToNull(kakaoGenreCode);
+        if (normalized == null || "all".equalsIgnoreCase(normalized)) {
+            return List.of();
+        }
+        return KAKAO_GENRE_CODE_MAP.getOrDefault(normalized, List.of());
+    }
+
+    private String joinKakaoAuthors(JsonNode authors) {
+        if (!authors.isArray()) {
+            return null;
+        }
+
+        List<String> names = collectKakaoAuthorNames(authors, false);
+        if (names.isEmpty()) {
+            names = collectKakaoAuthorNames(authors, true);
+        }
+        return names.isEmpty() ? null : String.join(", ", names);
+    }
+
+    private List<String> collectKakaoAuthorNames(JsonNode authors, boolean includePublishers) {
+        List<String> names = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+
+        for (JsonNode author : authors) {
+            String type = trimToNull(author.path("type").asText(null));
+            if (!includePublishers && "PUBLISHER".equals(type)) {
+                continue;
+            }
+
+            String name = trimToNull(author.path("name").asText(null));
+            if (name != null && seen.add(name)) {
+                names.add(name);
+            }
+        }
+        return names;
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            String normalized = trimToNull(value);
+            if (normalized != null) {
+                return normalized;
+            }
+        }
+        return null;
+    }
+
+    private String normalizeKakaoImageUrl(String imageUrl) {
+        String normalized = trimToNull(imageUrl);
+        if (normalized == null) {
+            return null;
+        }
+
+        int queryIndex = normalized.indexOf('?');
+        String path = queryIndex >= 0 ? normalized.substring(0, queryIndex) : normalized;
+        String lowerPath = path.toLowerCase(Locale.ROOT);
+        if (lowerPath.endsWith(".webp")
+            || lowerPath.endsWith(".png")
+            || lowerPath.endsWith(".jpg")
+            || lowerPath.endsWith(".jpeg")
+            || lowerPath.endsWith(".gif")) {
+            return normalized;
+        }
+
+        String suffix = queryIndex >= 0 ? normalized.substring(queryIndex) : "";
+        return path + ".webp" + suffix;
+    }
+
+    private String buildNaverWebtoonUrl(String externalId) {
+        return NAVER_BASE_URL + "/webtoon/list?titleId=" + externalId;
+    }
+
+    private String buildKakaoWebtoonUrl(String externalId, String seoId, String title) {
+        String pathTitle = firstNonBlank(seoId, title);
+        if (pathTitle == null) {
+            return KAKAO_BASE_URL + "/content/" + externalId;
+        }
+        return KAKAO_BASE_URL + "/content/" + pathTitle.replace(' ', '-') + "/" + externalId;
     }
 
     private String trimToNull(String value) {
@@ -885,6 +1143,7 @@ public class CrawlerService {
         private String title;
         private String author;
         private String description;
+        private String originalUrl;
         private String thumbnailUrl;
         private boolean adult;
         private boolean finished;
@@ -896,24 +1155,56 @@ public class CrawlerService {
             this.externalId = externalId;
         }
 
-        private void mergeBaseInfo(JsonNode node) {
+        private void mergeNaverBaseInfo(JsonNode node, String originalUrl) {
             String parsedTitle = trimStatic(node.path("titleName").asText(null));
             String parsedAuthor = trimStatic(node.path("author").asText(null));
             String parsedThumbnail = trimStatic(node.path("thumbnailUrl").asText(null));
 
+            mergeBaseInfo(parsedTitle, parsedAuthor, null, parsedThumbnail, originalUrl, node.path("adult").asBoolean(false));
+            this.finished = this.finished || node.path("finish").asBoolean(false);
+            this.rest = this.rest || node.path("rest").asBoolean(false);
+        }
+
+        private void mergeKakaoBaseInfo(
+            String title,
+            String author,
+            String description,
+            String thumbnailUrl,
+            String originalUrl,
+            boolean adult
+        ) {
+            mergeBaseInfo(title, author, description, thumbnailUrl, originalUrl, adult);
+        }
+
+        private void mergeBaseInfo(
+            String parsedTitle,
+            String parsedAuthor,
+            String parsedDescription,
+            String parsedThumbnail,
+            String parsedOriginalUrl,
+            boolean parsedAdult
+        ) {
             if (parsedTitle != null) {
                 this.title = parsedTitle;
             }
             if (parsedAuthor != null) {
                 this.author = parsedAuthor;
             }
+            if (parsedDescription != null) {
+                this.description = parsedDescription;
+            }
             if (parsedThumbnail != null) {
                 this.thumbnailUrl = parsedThumbnail;
             }
+            if (parsedOriginalUrl != null) {
+                this.originalUrl = parsedOriginalUrl;
+            }
 
-            this.adult = this.adult || node.path("adult").asBoolean(false);
-            this.finished = this.finished || node.path("finish").asBoolean(false);
-            this.rest = this.rest || node.path("rest").asBoolean(false);
+            this.adult = this.adult || parsedAdult;
+        }
+
+        private void markCompleted() {
+            this.finished = true;
         }
 
         private static String trimStatic(String value) {
@@ -952,6 +1243,10 @@ public class CrawlerService {
 
         private String description() {
             return description;
+        }
+
+        private String originalUrl() {
+            return originalUrl;
         }
 
         private String thumbnailUrl() {
@@ -998,9 +1293,36 @@ public class CrawlerService {
     private record GenreFetchPlan(String apiGenreCode, String dbGenreCode) {
     }
 
+    private record KakaoTimetableFetchPlan(String placement, String weekdayCode, boolean completed) {
+    }
+
+    private record PlatformReference(String code, String name, String baseUrl) {
+    }
+
     private record GenreReference(String code, String name, int sortOrder) {
     }
 
     private record WeekdayReference(String code, String name, int sortOrder) {
+    }
+
+    private enum CrawlerTarget {
+        NAVER(NAVER_PLATFORM_CODE, "네이버 웹툰"),
+        KAKAO(KAKAO_PLATFORM_CODE, "카카오 웹툰");
+
+        private final String platformCode;
+        private final String displayName;
+
+        CrawlerTarget(String platformCode, String displayName) {
+            this.platformCode = platformCode;
+            this.displayName = displayName;
+        }
+
+        private String platformCode() {
+            return platformCode;
+        }
+
+        private String displayName() {
+            return displayName;
+        }
     }
 }

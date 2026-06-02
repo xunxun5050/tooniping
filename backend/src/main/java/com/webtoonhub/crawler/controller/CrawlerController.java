@@ -32,6 +32,16 @@ public class CrawlerController {
         return ApiResponse.ok(crawlerService.runWeeklyCrawler());
     }
 
+    @PostMapping("/crawlers/kakao-webtoon/initial")
+    public ApiResponse<CrawlRunResponseDto> runKakaoInitialCrawler() {
+        return ApiResponse.ok(crawlerService.runKakaoInitialCrawler());
+    }
+
+    @PostMapping("/crawlers/kakao-webtoon/weekly")
+    public ApiResponse<CrawlRunResponseDto> runKakaoWeeklyCrawler() {
+        return ApiResponse.ok(crawlerService.runKakaoWeeklyCrawler());
+    }
+
     @GetMapping("/crawl-histories")
     public ApiResponse<PagedResultDto<CrawlHistoryDto>> getCrawlHistories(
         @RequestParam(defaultValue = "0") int page,

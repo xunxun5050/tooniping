@@ -50,7 +50,7 @@ export function WebtoonCard({
       </Link>
       {showSourceButton ? (
         <a className="source-btn" href={webtoon.originalUrl} target="_blank" rel="noreferrer">
-          네이버 웹툰 바로가기
+          {webtoon.platform.name} 바로가기
         </a>
       ) : null}
     </article>

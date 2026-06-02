@@ -38,7 +38,14 @@ cd backend
 초기 웹툰 데이터 적재:
 
 ```bash
-curl -X POST http://localhost:8080/api/admin/crawlers/naver-webtoon/initial
+TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"admin1234"}' | jq -r '.data.token')
+
+curl -X POST http://localhost:8080/api/admin/crawlers/naver-webtoon/initial \
+  -H "Authorization: Bearer $TOKEN"
+curl -X POST http://localhost:8080/api/admin/crawlers/kakao-webtoon/initial \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ### 3) Frontend 실행

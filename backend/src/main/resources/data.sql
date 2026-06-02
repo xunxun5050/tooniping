@@ -2,6 +2,10 @@ MERGE INTO platforms (code, name, base_url, is_active, created_at, updated_at)
 KEY(code)
 VALUES ('NAVER_WEBTOON', '네이버 웹툰', 'https://comic.naver.com', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
+MERGE INTO platforms (code, name, base_url, is_active, created_at, updated_at)
+KEY(code)
+VALUES ('KAKAO_WEBTOON', '카카오 웹툰', 'https://webtoon.kakao.com', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
 MERGE INTO weekdays (code, name, sort_order)
 KEY(code)
 VALUES ('MONDAY', '월요일', 1);
@@ -32,7 +36,11 @@ VALUES ('SUNDAY', '일요일', 7);
 
 MERGE INTO weekdays (code, name, sort_order)
 KEY(code)
-VALUES ('COMPLETED', '완결', 8);
+VALUES ('DAILY_PLUS', '매일+', 8);
+
+MERGE INTO weekdays (code, name, sort_order)
+KEY(code)
+VALUES ('COMPLETED', '완결', 9);
 
 MERGE INTO genres (code, name, sort_order, is_active, created_at, updated_at)
 KEY(code)
