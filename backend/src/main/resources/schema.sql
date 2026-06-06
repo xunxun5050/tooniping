@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS webtoons (
     title VARCHAR(255) NOT NULL,
     author VARCHAR(255),
     description TEXT,
-    original_url VARCHAR(1000) NOT NULL,
+    original_url VARCHAR(700) NOT NULL,
     status VARCHAR(30) NOT NULL,
     is_adult BOOLEAN NOT NULL DEFAULT FALSE,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
