@@ -1,9 +1,9 @@
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/webtoon_hub?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=utf8
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/webtoon_hub?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=utf8}
     driver-class-name: com.mysql.cj.jdbc.Driver
-    username: webtoon
-    password: webtoon
+    username: ${SPRING_DATASOURCE_USERNAME:webtoon}
+    password: ${SPRING_DATASOURCE_PASSWORD:webtoon}
   sql:
     init:
       mode: always
