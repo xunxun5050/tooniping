@@ -81,11 +81,10 @@ CREATE TABLE IF NOT EXISTS webtoon_popularity_rankings (
     CONSTRAINT fk_webtoon_popularity_rankings_webtoon
         FOREIGN KEY (webtoon_id) REFERENCES webtoons(id),
     CONSTRAINT uk_webtoon_popularity_rankings_scope
-        UNIQUE (webtoon_id, ranking_type, ranking_key)
+        UNIQUE (webtoon_id, ranking_type, ranking_key),
+    INDEX idx_webtoon_popularity_rankings_lookup
+        (ranking_type, ranking_key, rank_position)
 );
-
-CREATE INDEX IF NOT EXISTS idx_webtoon_popularity_rankings_lookup
-    ON webtoon_popularity_rankings (ranking_type, ranking_key, rank_position);
 
 CREATE TABLE IF NOT EXISTS user_profiles (
     username VARCHAR(100) PRIMARY KEY,
