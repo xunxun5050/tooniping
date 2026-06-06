@@ -23,6 +23,8 @@ target/
 # Env
 .env
 .env.*
+oauth.env
+backend/oauth.env
 
 # Local assets
 backend/storage/

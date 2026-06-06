@@ -6,6 +6,13 @@ import { PagedResult, WebtoonCard as WebtoonCardType, WebtoonFilters } from "@/l
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
+const SORT_OPTIONS = [
+  { code: "popular", name: "인기순" },
+  { code: "latest", name: "최신순" },
+  { code: "updated", name: "업데이트순" },
+  { code: "title", name: "제목순" },
+  { code: "weekday", name: "요일순" }
+];
 const WEEKDAY_BY_ENGLISH_NAME: Record<string, string> = {
   Monday: "MONDAY",
   Tuesday: "TUESDAY",
@@ -95,7 +102,8 @@ export default async function WebtoonsPage({ searchParams }: Props) {
   const weekday = rawWeekday === "ALL" ? "" : rawWeekday;
   const genre = pick(resolvedSearchParams, "genre");
   const status = pick(resolvedSearchParams, "status");
-  const sort = pick(resolvedSearchParams, "sort") || "latest";
+  const rawSort = pick(resolvedSearchParams, "sort");
+  const sort = rawSort || "popular";
   const rawPage = pick(resolvedSearchParams, "page");
   const rawSize = pick(resolvedSearchParams, "size");
   const page = normalizePage(rawPage || "0");
@@ -113,6 +121,11 @@ export default async function WebtoonsPage({ searchParams }: Props) {
 
   if (!rawSize || rawSize !== String(size)) {
     canonicalParams.set("size", String(size));
+    shouldRedirect = true;
+  }
+
+  if (!rawSort) {
+    canonicalParams.set("sort", sort);
     shouldRedirect = true;
   }
 
@@ -148,14 +161,6 @@ export default async function WebtoonsPage({ searchParams }: Props) {
 
   return (
     <section className="list-page">
-      <div className="list-header reveal">
-        <h1>웹툰 목록</h1>
-        <form className="search-form" action="/webtoons" method="get">
-          <input type="text" name="keyword" defaultValue={keyword} placeholder="제목 또는 작가명" />
-          <button type="submit">검색</button>
-        </form>
-      </div>
-
       <div className="list-layout">
         <div>
           <p className="result-count reveal">총 {list.totalElements.toLocaleString()}개</p>
@@ -187,6 +192,14 @@ export default async function WebtoonsPage({ searchParams }: Props) {
 
         <aside className="filters-remote reveal">
           <p className="remote-title">필터 리모컨</p>
+          <FilterGroup
+            title="정렬"
+            options={SORT_OPTIONS}
+            selectedCode={sort}
+            showAll={false}
+            makeHref={(code) => buildQuery(resolvedSearchParams, { sort: code, page: "" })}
+            clearHref={buildQuery(resolvedSearchParams, { sort: "popular", page: "" })}
+          />
           <FilterGroup
             title="요일"
             options={filters.weekdays}

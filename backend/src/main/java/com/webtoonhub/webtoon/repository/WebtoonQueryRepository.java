@@ -37,6 +37,11 @@ public class WebtoonQueryRepository {
         "HIATUS", "휴재",
         "UNKNOWN", "알 수 없음"
     );
+    private static final String POPULARITY_GLOBAL_TYPE = "GLOBAL";
+    private static final String POPULARITY_GLOBAL_KEY = "ALL";
+    private static final String POPULARITY_GENRE_TYPE = "GENRE";
+    private static final String POPULARITY_WEEKDAY_TYPE = "WEEKDAY";
+    private static final String POPULARITY_STATUS_TYPE = "STATUS";
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -66,6 +71,7 @@ public class WebtoonQueryRepository {
         int safePage = Math.max(condition.page(), 0);
         int safeSize = clampSize(condition.size());
         MapSqlParameterSource params = new MapSqlParameterSource();
+        String normalizedSort = normalizeSort(condition.sort());
 
         StringBuilder where = new StringBuilder(" WHERE 1=1 ");
         if (!includeInactive) {
@@ -102,7 +108,28 @@ public class WebtoonQueryRepository {
         Long totalElements = jdbc.queryForObject(countSql, params, Long.class);
         long total = totalElements == null ? 0L : totalElements;
 
-        String orderBy = switch (normalizeSort(condition.sort())) {
+        String popularityJoin = "";
+        if ("popular".equals(normalizedSort)) {
+            PopularityScope popularityScope = resolvePopularityScope(condition);
+            params.addValue("popularityType", popularityScope.rankingType());
+            params.addValue("popularityKey", popularityScope.rankingKey());
+            popularityJoin = """
+                LEFT JOIN webtoon_popularity_rankings pop
+                  ON pop.webtoon_id = w.id
+                 AND pop.ranking_type = :popularityType
+                 AND pop.ranking_key = :popularityKey
+                """;
+        }
+
+        String orderBy = switch (normalizedSort) {
+            case "popular" -> """
+                 ORDER BY
+                   CASE WHEN pop.rank_position IS NULL THEN 1 ELSE 0 END ASC,
+                   pop.rank_position ASC,
+                   p.id ASC,
+                   w.created_at DESC,
+                   w.id DESC
+                """;
             case "title" -> " ORDER BY w.title ASC, w.id DESC ";
             case "weekday" -> " ORDER BY (SELECT MIN(wd3.sort_order) FROM webtoon_weekdays ww3 JOIN weekdays wd3 ON wd3.id = ww3.weekday_id WHERE ww3.webtoon_id = w.id) ASC, w.title ASC ";
             case "updated" -> " ORDER BY w.updated_at DESC, w.id DESC ";
@@ -128,7 +155,7 @@ public class WebtoonQueryRepository {
             FROM webtoons w
             JOIN platforms p ON p.id = w.platform_id
             LEFT JOIN webtoon_images img ON img.webtoon_id = w.id AND img.is_primary = TRUE AND img.image_type = 'THUMBNAIL'
-            """ + where + orderBy + " LIMIT :size OFFSET :offset";
+            """ + popularityJoin + where + orderBy + " LIMIT :size OFFSET :offset";
 
         params.addValue("size", safeSize);
         params.addValue("offset", safePage * safeSize);
@@ -528,6 +555,19 @@ public class WebtoonQueryRepository {
         return sort.toLowerCase();
     }
 
+    private PopularityScope resolvePopularityScope(WebtoonSearchCondition condition) {
+        if (hasText(condition.genre())) {
+            return new PopularityScope(POPULARITY_GENRE_TYPE, condition.genre());
+        }
+        if (hasText(condition.weekday())) {
+            return new PopularityScope(POPULARITY_WEEKDAY_TYPE, condition.weekday());
+        }
+        if ("COMPLETED".equalsIgnoreCase(condition.status())) {
+            return new PopularityScope(POPULARITY_STATUS_TYPE, "COMPLETED");
+        }
+        return new PopularityScope(POPULARITY_GLOBAL_TYPE, POPULARITY_GLOBAL_KEY);
+    }
+
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
     }
@@ -575,5 +615,8 @@ public class WebtoonQueryRepository {
         LocalDateTime createdAt,
         LocalDateTime updatedAt
     ) {
+    }
+
+    private record PopularityScope(String rankingType, String rankingKey) {
     }
 }

@@ -12,3 +12,20 @@ spring:
 
 server:
   port: 8080
+
+app:
+  auth:
+    username: ${APP_AUTH_USERNAME:admin}
+    password: ${APP_AUTH_PASSWORD:admin1234}
+    secret: ${APP_AUTH_SECRET:webtoon-hub-secret-key-change-this}
+    token-valid-minutes: ${APP_AUTH_TOKEN_VALID_MINUTES:480}
+    oauth:
+      frontend-base-url: ${APP_AUTH_OAUTH_FRONTEND_BASE_URL:http://localhost:3000}
+      kakao:
+        client-id: ${APP_AUTH_OAUTH_KAKAO_CLIENT_ID:}
+        client-secret: ${APP_AUTH_OAUTH_KAKAO_CLIENT_SECRET:}
+        redirect-uri: ${APP_AUTH_OAUTH_KAKAO_REDIRECT_URI:http://localhost:8080/api/auth/oauth/kakao/callback}
+      naver:
+        client-id: ${APP_AUTH_OAUTH_NAVER_CLIENT_ID:}
+        client-secret: ${APP_AUTH_OAUTH_NAVER_CLIENT_SECRET:}
+        redirect-uri: ${APP_AUTH_OAUTH_NAVER_REDIRECT_URI:http://localhost:8080/api/auth/oauth/naver/callback}

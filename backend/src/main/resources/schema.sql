@@ -69,6 +69,34 @@ CREATE TABLE IF NOT EXISTS webtoon_weekdays (
         FOREIGN KEY (weekday_id) REFERENCES weekdays(id)
 );
 
+CREATE TABLE IF NOT EXISTS webtoon_popularity_rankings (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    webtoon_id BIGINT NOT NULL,
+    ranking_type VARCHAR(30) NOT NULL,
+    ranking_key VARCHAR(50) NOT NULL,
+    rank_position INT NOT NULL,
+    collected_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT fk_webtoon_popularity_rankings_webtoon
+        FOREIGN KEY (webtoon_id) REFERENCES webtoons(id),
+    CONSTRAINT uk_webtoon_popularity_rankings_scope
+        UNIQUE (webtoon_id, ranking_type, ranking_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_webtoon_popularity_rankings_lookup
+    ON webtoon_popularity_rankings (ranking_type, ranking_key, rank_position);
+
+CREATE TABLE IF NOT EXISTS user_profiles (
+    username VARCHAR(100) PRIMARY KEY,
+    nickname VARCHAR(40) NOT NULL UNIQUE,
+    provider VARCHAR(30),
+    provider_user_id VARCHAR(100),
+    source_nickname VARCHAR(100),
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS webtoon_images (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     webtoon_id BIGINT NOT NULL,
@@ -113,4 +141,13 @@ CREATE TABLE IF NOT EXISTS crawl_failures (
     created_at DATETIME NOT NULL,
     CONSTRAINT fk_crawl_failures_history
         FOREIGN KEY (crawl_history_id) REFERENCES crawl_histories(id)
+);
+
+CREATE TABLE IF NOT EXISTS user_favorite_webtoons (
+    username VARCHAR(100) NOT NULL,
+    webtoon_id BIGINT NOT NULL,
+    created_at DATETIME NOT NULL,
+    PRIMARY KEY (username, webtoon_id),
+    CONSTRAINT fk_user_favorite_webtoons_webtoon
+        FOREIGN KEY (webtoon_id) REFERENCES webtoons(id)
 );

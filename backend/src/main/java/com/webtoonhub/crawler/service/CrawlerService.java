@@ -35,6 +35,12 @@ public class CrawlerService {
     private static final String KAKAO_TIMETABLE_API_URL_TEMPLATE = "https://gateway-kw.kakao.com/section/v2/timetables/days?placement=%s";
     private static final String NAVER_BASE_URL = "https://comic.naver.com";
     private static final String KAKAO_BASE_URL = "https://webtoon.kakao.com";
+    private static final String POPULARITY_GLOBAL_TYPE = "GLOBAL";
+    private static final String POPULARITY_GLOBAL_KEY = "ALL";
+    private static final String POPULARITY_GENRE_TYPE = "GENRE";
+    private static final String POPULARITY_WEEKDAY_TYPE = "WEEKDAY";
+    private static final String POPULARITY_STATUS_TYPE = "STATUS";
+    private static final String POPULARITY_SECTION_TYPE = "SECTION";
 
     private static final String STATUS_RUNNING = "RUNNING";
     private static final String STATUS_SUCCESS = "SUCCESS";
@@ -289,6 +295,7 @@ public class CrawlerService {
 
         collectFromGenreApi(webtoonsByExternalId, collectionFailures);
         collectWeekdayMappings(webtoonsByExternalId, collectionFailures);
+        assignGlobalPopularityRankings(webtoonsByExternalId.values());
         applyDerivedWeekdayMappings(webtoonsByExternalId.values());
 
         return new CrawlCollectionResult(webtoonsByExternalId, collectionFailures);
@@ -315,13 +322,34 @@ public class CrawlerService {
             }
 
             int totalPages = Math.max(firstPage.path("pageInfo").path("totalPages").asInt(1), 1);
-            mergeTitleList(firstPage, firstPageUrl, genrePlan.dbGenreCode(), null, webtoonsByExternalId, failures);
+            int nextRankPosition = 1;
+            nextRankPosition += mergeTitleList(
+                firstPage,
+                firstPageUrl,
+                genrePlan.dbGenreCode(),
+                null,
+                POPULARITY_GENRE_TYPE,
+                genrePlan.dbGenreCode(),
+                nextRankPosition,
+                webtoonsByExternalId,
+                failures
+            );
 
             for (int page = 2; page <= totalPages; page++) {
                 String pageUrl = NAVER_GENRE_API_URL_TEMPLATE.formatted(genrePlan.apiGenreCode(), page);
                 try {
                     JsonNode pageResponse = fetchJson(pageUrl);
-                    mergeTitleList(pageResponse, pageUrl, genrePlan.dbGenreCode(), null, webtoonsByExternalId, failures);
+                    nextRankPosition += mergeTitleList(
+                        pageResponse,
+                        pageUrl,
+                        genrePlan.dbGenreCode(),
+                        null,
+                        POPULARITY_GENRE_TYPE,
+                        genrePlan.dbGenreCode(),
+                        nextRankPosition,
+                        webtoonsByExternalId,
+                        failures
+                    );
                 } catch (Exception exception) {
                     failures.add(new CrawlFailureInput(
                         pageUrl,
@@ -351,6 +379,7 @@ public class CrawlerService {
                 continue;
             }
 
+            int rankPosition = 1;
             for (JsonNode node : list) {
                 String externalId = getExternalId(node);
                 String title = trimToNull(node.path("titleName").asText(null));
@@ -369,15 +398,20 @@ public class CrawlerService {
                 CrawlWebtoon webtoon = webtoonsByExternalId.computeIfAbsent(externalId, CrawlWebtoon::new);
                 webtoon.mergeNaverBaseInfo(node, buildNaverWebtoonUrl(externalId));
                 webtoon.weekdayCodes().add(weekdayCode);
+                webtoon.addPopularityRanking(POPULARITY_WEEKDAY_TYPE, weekdayCode, rankPosition);
+                rankPosition++;
             }
         }
     }
 
-    private void mergeTitleList(
+    private int mergeTitleList(
         JsonNode response,
         String targetUrl,
         String genreCode,
         String weekdayCode,
+        String rankingType,
+        String rankingKey,
+        int rankStart,
         Map<String, CrawlWebtoon> webtoonsByExternalId,
         List<CrawlFailureInput> failures
     ) {
@@ -390,10 +424,13 @@ public class CrawlerService {
                 "INVALID_PAYLOAD",
                 "titleList 배열을 찾지 못했습니다."
             ));
-            return;
+            return 0;
         }
 
+        int processedCount = 0;
         for (JsonNode node : titleList) {
+            int rankPosition = rankStart + processedCount;
+            processedCount++;
             String externalId = getExternalId(node);
             String title = trimToNull(node.path("titleName").asText(null));
 
@@ -416,7 +453,11 @@ public class CrawlerService {
             if (weekdayCode != null) {
                 webtoon.weekdayCodes().add(weekdayCode);
             }
+            if (rankingType != null && rankingKey != null) {
+                webtoon.addPopularityRanking(rankingType, rankingKey, rankPosition);
+            }
         }
+        return processedCount;
     }
 
     private CrawlCollectionResult collectKakaoWebtoons() {
@@ -439,6 +480,7 @@ public class CrawlerService {
             }
         }
 
+        assignGlobalPopularityRankings(webtoonsByExternalId.values());
         applyDerivedWeekdayMappings(webtoonsByExternalId.values());
         return new CrawlCollectionResult(webtoonsByExternalId, collectionFailures);
     }
@@ -462,6 +504,7 @@ public class CrawlerService {
             return;
         }
 
+        int rankPosition = 1;
         for (JsonNode section : sections) {
             JsonNode cardGroups = section.path("cardGroups");
             if (!cardGroups.isArray()) {
@@ -475,7 +518,8 @@ public class CrawlerService {
                 }
 
                 for (JsonNode card : cards) {
-                    mergeKakaoCard(card, targetUrl, plan, webtoonsByExternalId, failures);
+                    mergeKakaoCard(card, targetUrl, plan, rankPosition, webtoonsByExternalId, failures);
+                    rankPosition++;
                 }
             }
         }
@@ -485,6 +529,7 @@ public class CrawlerService {
         JsonNode card,
         String targetUrl,
         KakaoTimetableFetchPlan plan,
+        int rankPosition,
         Map<String, CrawlWebtoon> webtoonsByExternalId,
         List<CrawlFailureInput> failures
     ) {
@@ -520,8 +565,13 @@ public class CrawlerService {
 
         if (plan.completed()) {
             webtoon.markCompleted();
+            webtoon.addPopularityRanking(POPULARITY_WEEKDAY_TYPE, "COMPLETED", rankPosition);
+            webtoon.addPopularityRanking(POPULARITY_STATUS_TYPE, "COMPLETED", rankPosition);
         } else if (plan.weekdayCode() != null) {
             webtoon.weekdayCodes().add(plan.weekdayCode());
+            webtoon.addPopularityRanking(POPULARITY_WEEKDAY_TYPE, plan.weekdayCode(), rankPosition);
+        } else {
+            webtoon.addPopularityRanking(POPULARITY_SECTION_TYPE, kakaoSectionKey(plan.placement()), rankPosition);
         }
 
         JsonNode genreFilters = card.path("genreFilters");
@@ -545,6 +595,14 @@ public class CrawlerService {
             if (webtoon.weekdayCodes().isEmpty()) {
                 webtoon.weekdayCodes().add("DAILY_PLUS");
             }
+        }
+    }
+
+    private void assignGlobalPopularityRankings(Collection<CrawlWebtoon> webtoons) {
+        int rankPosition = 1;
+        for (CrawlWebtoon webtoon : webtoons) {
+            webtoon.addPopularityRanking(POPULARITY_GLOBAL_TYPE, POPULARITY_GLOBAL_KEY, rankPosition);
+            rankPosition++;
         }
     }
 
@@ -596,6 +654,7 @@ public class CrawlerService {
 
                 replaceGenreMappings(webtoonId, genreIds);
                 replaceWeekdayMappings(webtoonId, weekdayIds);
+                replacePopularityRankings(webtoonId, webtoon.popularityRankings());
                 upsertThumbnail(webtoonId, webtoon.thumbnailUrl());
 
                 successCount++;
@@ -753,6 +812,46 @@ public class CrawlerService {
             params.add(new MapSqlParameterSource()
                 .addValue("webtoonId", webtoonId)
                 .addValue("weekdayId", weekdayId));
+        }
+        jdbc.batchUpdate(insertSql, params.toArray(MapSqlParameterSource[]::new));
+    }
+
+    private void replacePopularityRankings(long webtoonId, Collection<PopularityRanking> rankings) {
+        jdbc.update("DELETE FROM webtoon_popularity_rankings WHERE webtoon_id = :webtoonId",
+            new MapSqlParameterSource("webtoonId", webtoonId));
+
+        if (rankings.isEmpty()) {
+            return;
+        }
+
+        String insertSql = """
+            INSERT INTO webtoon_popularity_rankings (
+              webtoon_id,
+              ranking_type,
+              ranking_key,
+              rank_position,
+              collected_at,
+              created_at,
+              updated_at
+            )
+            VALUES (
+              :webtoonId,
+              :rankingType,
+              :rankingKey,
+              :rankPosition,
+              CURRENT_TIMESTAMP,
+              CURRENT_TIMESTAMP,
+              CURRENT_TIMESTAMP
+            )
+            """;
+
+        List<MapSqlParameterSource> params = new ArrayList<>();
+        for (PopularityRanking ranking : rankings) {
+            params.add(new MapSqlParameterSource()
+                .addValue("webtoonId", webtoonId)
+                .addValue("rankingType", ranking.rankingType())
+                .addValue("rankingKey", ranking.rankingKey())
+                .addValue("rankPosition", ranking.rankPosition()));
         }
         jdbc.batchUpdate(insertSql, params.toArray(MapSqlParameterSource[]::new));
     }
@@ -1043,6 +1142,14 @@ public class CrawlerService {
         return KAKAO_GENRE_CODE_MAP.getOrDefault(normalized, List.of());
     }
 
+    private String kakaoSectionKey(String placement) {
+        String normalized = trimToNull(placement);
+        if (normalized == null) {
+            return "UNKNOWN";
+        }
+        return normalized.replace("timetable_", "").toUpperCase(Locale.ROOT);
+    }
+
     private String joinKakaoAuthors(JsonNode authors) {
         if (!authors.isArray()) {
             return null;
@@ -1150,6 +1257,7 @@ public class CrawlerService {
         private boolean rest;
         private final Set<String> genreCodes = new LinkedHashSet<>();
         private final Set<String> weekdayCodes = new LinkedHashSet<>();
+        private final Map<PopularityRankingKey, Integer> popularityRankings = new LinkedHashMap<>();
 
         private CrawlWebtoon(String externalId) {
             this.externalId = externalId;
@@ -1205,6 +1313,20 @@ public class CrawlerService {
 
         private void markCompleted() {
             this.finished = true;
+        }
+
+        private void addPopularityRanking(String rankingType, String rankingKey, int rankPosition) {
+            String normalizedType = trimStatic(rankingType);
+            String normalizedKey = trimStatic(rankingKey);
+            if (normalizedType == null || normalizedKey == null || rankPosition <= 0) {
+                return;
+            }
+
+            popularityRankings.merge(
+                new PopularityRankingKey(normalizedType, normalizedKey),
+                rankPosition,
+                Math::min
+            );
         }
 
         private static String trimStatic(String value) {
@@ -1264,6 +1386,16 @@ public class CrawlerService {
         private Set<String> weekdayCodes() {
             return weekdayCodes;
         }
+
+        private Collection<PopularityRanking> popularityRankings() {
+            return popularityRankings.entrySet().stream()
+                .map(entry -> new PopularityRanking(
+                    entry.getKey().rankingType(),
+                    entry.getKey().rankingKey(),
+                    entry.getValue()
+                ))
+                .toList();
+        }
     }
 
     private record CrawlFailureInput(
@@ -1288,6 +1420,12 @@ public class CrawlerService {
         int successCount,
         int failCount
     ) {
+    }
+
+    private record PopularityRankingKey(String rankingType, String rankingKey) {
+    }
+
+    private record PopularityRanking(String rankingType, String rankingKey, int rankPosition) {
     }
 
     private record GenreFetchPlan(String apiGenreCode, String dbGenreCode) {

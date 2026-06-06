@@ -65,8 +65,53 @@ pnpm dev
 - `GET /api/webtoons`
 - `GET /api/webtoons/{id}`
 - `GET /api/webtoons/{id}/similar`
-- `GET /api/admin/webtoons`
-- `POST /api/admin/webtoons`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `GET /api/admin/webtoons` (로그인 토큰 필요)
+- `POST /api/admin/webtoons` (로그인 토큰 필요)
+
+## 로그인 (관리자)
+
+- 기본 계정: `admin`
+- 기본 비밀번호: `admin1234`
+- 로그인 후 발급된 토큰을 `Authorization: Bearer <token>` 헤더로 전달하면 관리자 API를 호출할 수 있습니다.
+
+환경변수로 계정 변경:
+
+- `APP_AUTH_USERNAME`
+- `APP_AUTH_PASSWORD`
+- `APP_AUTH_SECRET`
+- `APP_AUTH_TOKEN_VALID_MINUTES`
+
+## 소셜 회원가입/로그인 (카카오/네이버)
+
+- 로그인 페이지(`/login`)에서 `카카오로 시작하기`, `네이버로 시작하기` 버튼으로 회원가입/로그인이 가능합니다.
+- 백엔드 환경변수를 설정해야 실제 OAuth 연동이 동작합니다.
+
+로컬 설정 파일 생성:
+
+```bash
+cp backend/oauth.env.example backend/oauth.env
+```
+
+`backend/oauth.env`에 실제 키를 입력한 뒤, 백엔드는 `./run-backend.sh`로 실행하면 자동 로드됩니다.
+
+필수 환경변수:
+
+- `APP_AUTH_OAUTH_FRONTEND_BASE_URL` (예: `http://localhost:3000`)
+- `APP_AUTH_OAUTH_KAKAO_CLIENT_ID`
+- `APP_AUTH_OAUTH_KAKAO_CLIENT_SECRET`
+- `APP_AUTH_OAUTH_KAKAO_REDIRECT_URI` (예: `http://localhost:8080/api/auth/oauth/kakao/callback`)
+- `APP_AUTH_OAUTH_NAVER_CLIENT_ID`
+- `APP_AUTH_OAUTH_NAVER_CLIENT_SECRET`
+- `APP_AUTH_OAUTH_NAVER_REDIRECT_URI` (예: `http://localhost:8080/api/auth/oauth/naver/callback`)
+
+각 개발자 콘솔(카카오/네이버)에도 위 `REDIRECT_URI`를 동일하게 등록해야 합니다.
+
+권장 등록 값(로컬 개발):
+
+- 카카오 Redirect URI: `http://localhost:8080/api/auth/oauth/kakao/callback`
+- 네이버 Callback URL: `http://localhost:8080/api/auth/oauth/naver/callback`
 
 ## 참고
 

@@ -70,3 +70,28 @@ export type WebtoonFilters = {
   weekdays: CodeName[];
   statuses: CodeName[];
 };
+
+export type AuthLoginResponse = {
+  token: string;
+  tokenType: string;
+  username: string;
+  nickname: string;
+  expiresAt: string;
+  loginWeekday: string;
+};
+
+export type AuthMeResponse = {
+  username: string;
+  nickname: string;
+};
+
+export type FavoriteWebtoon = {
+  id: number;
+  title: string;
+  author: string;
+  thumbnailUrl: string | null;
+  statusName: string;
+  originalUrl: string;
+  weekdays: CodeName[];
+  addedAt: string;
+};
