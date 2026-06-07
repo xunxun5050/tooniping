@@ -82,6 +82,10 @@ public class AuthService {
         return userProfileService.updateNickname(username, nickname);
     }
 
+    public void deleteAccount(String username) {
+        userProfileService.deleteAccount(username);
+    }
+
     private LoginResponse issueLoginResponse(
         String username,
         String provider,

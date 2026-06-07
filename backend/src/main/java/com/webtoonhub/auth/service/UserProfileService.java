@@ -11,6 +11,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class UserProfileService {
@@ -117,6 +118,15 @@ public class UserProfileService {
             throw new BadRequestException("이미 사용 중인 닉네임입니다.");
         }
         return findProfile(normalizedUsername);
+    }
+
+    @Transactional
+    public void deleteAccount(String username) {
+        String normalizedUsername = normalizeUsername(username);
+        MapSqlParameterSource params = new MapSqlParameterSource("username", normalizedUsername);
+
+        jdbc.update("DELETE FROM user_favorite_webtoons WHERE username = :username", params);
+        jdbc.update("DELETE FROM user_profiles WHERE username = :username", params);
     }
 
     private void touchProviderInfo(String username, String provider, String providerUserId, String sourceNickname) {

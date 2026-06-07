@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import {
   AUTH_SESSION_CHANGED_EVENT,
   AuthSession,
@@ -16,15 +16,9 @@ import {
   readFavoriteWebtoons,
   syncFavoriteWebtoonsFromServer
 } from "@/lib/favorites-client";
-import { ApiResponse, AuthMeResponse, FavoriteWebtoon, PagedResult, WebtoonCard } from "@/lib/types";
+import { ApiResponse, AuthMeResponse, FavoriteWebtoon } from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-
-type DashboardSnapshot = {
-  username: string;
-  nickname: string;
-  totalWebtoons: number;
-};
 
 type UserProfile = {
   username: string;
@@ -57,19 +51,6 @@ const MY_ACTIVITY_ITEMS = [
   }
 ];
 
-const ACCOUNT_ITEMS = [
-  {
-    title: "보안 설정",
-    description: "비밀번호 변경, 세션 관리 등 보안 기능을 제공할 예정이에요.",
-    status: "준비중"
-  },
-  {
-    title: "로그인 기록",
-    description: "최근 로그인 이력을 확인하고 비정상 접근을 점검해요.",
-    status: "준비중"
-  }
-];
-
 function formatFavoriteAddedAt(value: string): string {
   const timestamp = Date.parse(value);
   if (Number.isNaN(timestamp)) {
@@ -78,44 +59,13 @@ function formatFavoriteAddedAt(value: string): string {
   return new Date(timestamp).toLocaleString("ko-KR", { hour12: false });
 }
 
-function formatDateTime(value: string): string {
-  const timestamp = Date.parse(value);
-  if (Number.isNaN(timestamp)) {
-    return "-";
-  }
-  return new Date(timestamp).toLocaleString("ko-KR", { hour12: false });
-}
-
-function formatRemainingMinutes(value: string): string {
-  const timestamp = Date.parse(value);
-  if (Number.isNaN(timestamp)) {
-    return "-";
-  }
-
-  const diffMs = timestamp - Date.now();
-  if (diffMs <= 0) {
-    return "만료됨";
-  }
-
-  const remainingMinutes = Math.floor(diffMs / 1000 / 60);
-  if (remainingMinutes < 60) {
-    return `${remainingMinutes}분`;
-  }
-
-  const hours = Math.floor(remainingMinutes / 60);
-  const minutes = remainingMinutes % 60;
-  return `${hours}시간 ${minutes}분`;
-}
-
 export default function MyPage() {
   const [session, setSession] = useState<AuthSession | null>(null);
-  const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [favoriteWebtoons, setFavoriteWebtoons] = useState<FavoriteWebtoon[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [nicknameInput, setNicknameInput] = useState("");
   const [nicknameMessage, setNicknameMessage] = useState<string | null>(null);
   const [savingNickname, setSavingNickname] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     function syncSession() {
@@ -188,56 +138,38 @@ export default function MyPage() {
 
   useEffect(() => {
     if (!session) {
-      setSnapshot(null);
+      setNicknameInput("");
       return;
     }
 
     const currentSession = session;
     let active = true;
     async function fetchDashboard() {
-      setLoading(true);
       setError(null);
 
       try {
         const authHeader = `${currentSession.tokenType} ${currentSession.token}`;
-        const [meRes, webtoonRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/auth/me`, {
-            headers: {
-              Authorization: authHeader
-            }
-          }),
-          fetch(`${API_BASE_URL}/api/admin/webtoons?page=0&size=1`, {
-            headers: {
-              Authorization: authHeader
-            }
-          })
-        ]);
+        const meRes = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          headers: {
+            Authorization: authHeader
+          }
+        });
 
         const meJson = (await meRes.json()) as ApiResponse<AuthMeResponse>;
-        const webtoonJson = (await webtoonRes.json()) as ApiResponse<PagedResult<WebtoonCard>>;
 
-        if (!meRes.ok || !webtoonRes.ok || !meJson.success || !webtoonJson.success || !meJson.data || !webtoonJson.data) {
+        if (!meRes.ok || !meJson.success || !meJson.data) {
           if (active) {
-            setError(meJson.message ?? webtoonJson.message ?? "대시보드 정보를 불러오지 못했습니다.");
+            setError(meJson.message ?? "프로필 정보를 불러오지 못했습니다.");
           }
           return;
         }
 
         if (active) {
-          setSnapshot({
-            username: meJson.data.username,
-            nickname: meJson.data.nickname,
-            totalWebtoons: webtoonJson.data.totalElements
-          });
           setNicknameInput(meJson.data.nickname);
         }
       } catch {
         if (active) {
-          setError("대시보드 조회 중 오류가 발생했습니다.");
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
+          setError("프로필 조회 중 오류가 발생했습니다.");
         }
       }
     }
@@ -248,24 +180,6 @@ export default function MyPage() {
       active = false;
     };
   }, [session]);
-
-  const loginInfoRows = useMemo(() => {
-    if (!session) {
-      return [];
-    }
-
-    return [
-      { label: "닉네임", value: snapshot?.nickname ?? session.nickname ?? session.username },
-      { label: "로그인 계정", value: snapshot?.username ?? session.username },
-      { label: "토큰 타입", value: session.tokenType },
-      { label: "세션 만료 시각", value: formatDateTime(session.expiresAt) },
-      { label: "남은 세션 시간", value: formatRemainingMinutes(session.expiresAt) },
-      {
-        label: "관리자 API 접근",
-        value: snapshot ? "인증 완료" : loading ? "확인 중..." : "확인 필요"
-      }
-    ];
-  }, [loading, session, snapshot]);
 
   async function handleNicknameSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -306,14 +220,6 @@ export default function MyPage() {
       };
       saveAuthSession(nextSession);
       setSession(nextSession);
-      setSnapshot((current) =>
-        current
-          ? {
-              ...current,
-              nickname: json.data.nickname
-            }
-          : current
-      );
       setNicknameInput(json.data.nickname);
       setNicknameMessage("닉네임을 저장했습니다.");
     } catch {
@@ -339,7 +245,7 @@ export default function MyPage() {
     <section className="mypage">
       <div className="mypage-header quick-nav reveal">
         <h1>마이페이지</h1>
-        <p className="description">계정 정보와 내 활동을 한곳에서 관리하세요.</p>
+        <p className="description">내 활동과 즐겨찾기 작품을 한곳에서 관리하세요.</p>
         <div className="mypage-actions">
           <Link className="more-link" href="/webtoons">
             웹툰 목록으로 이동
@@ -349,7 +255,6 @@ export default function MyPage() {
             type="button"
             onClick={() => {
               clearAuthSession();
-              setSnapshot(null);
             }}
           >
             로그아웃
@@ -360,19 +265,6 @@ export default function MyPage() {
       {error ? <p className="auth-error">{error}</p> : null}
 
       <div className="mypage-grid">
-        <section className="mypage-card reveal">
-          <h2>로그인 정보</h2>
-          <dl className="mypage-info-list">
-            {loginInfoRows.map((row) => (
-              <div key={row.label}>
-                <dt>{row.label}</dt>
-                <dd>{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-          {snapshot ? <p className="description">전체 웹툰 데이터: {snapshot.totalWebtoons.toLocaleString()}개</p> : null}
-        </section>
-
         <section className="mypage-card reveal">
           <h2>프로필 관리</h2>
           <form className="nickname-form" onSubmit={handleNicknameSubmit}>
@@ -448,17 +340,15 @@ export default function MyPage() {
 
         <section className="mypage-card reveal">
           <h2>계정 관리</h2>
-          <ul className="mypage-list">
-            {ACCOUNT_ITEMS.map((item) => (
-              <li key={item.title}>
-                <div>
-                  <strong>{item.title}</strong>
-                  <p>{item.description}</p>
-                </div>
-                <span>{item.status}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="withdrawal-entry">
+            <div>
+              <strong>회원 탈퇴</strong>
+              <p className="description">프로필과 저장한 즐겨찾기 삭제는 별도 확인 페이지에서 진행합니다.</p>
+            </div>
+            <Link className="withdrawal-link" href="/mypage/withdrawal">
+              탈퇴 페이지로 이동
+            </Link>
+          </div>
         </section>
       </div>
     </section>

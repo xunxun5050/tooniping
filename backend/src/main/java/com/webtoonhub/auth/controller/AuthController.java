@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.io.IOException;
 import org.springframework.http.HttpHeaders;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -55,6 +56,15 @@ public class AuthController {
     ) {
         String username = authService.authenticate(authorizationHeader);
         return ApiResponse.ok(authService.updateNickname(username, request.nickname()));
+    }
+
+    @DeleteMapping("/me")
+    public ApiResponse<Void> deleteAccount(
+        @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader
+    ) {
+        String username = authService.authenticate(authorizationHeader);
+        authService.deleteAccount(username);
+        return ApiResponse.ok(null);
     }
 
     @GetMapping("/oauth/{provider}/start")

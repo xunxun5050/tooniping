@@ -810,6 +810,100 @@ h2 {
   font-weight: 700;
 }
 
+.withdrawal-form {
+  display: grid;
+  gap: 9px;
+}
+
+.withdrawal-entry {
+  display: grid;
+  gap: 12px;
+}
+
+.withdrawal-entry strong,
+.withdrawal-form strong {
+  color: #b4233c;
+}
+
+.withdrawal-link {
+  width: fit-content;
+  border: 1px solid #f1c2ca;
+  border-radius: 10px;
+  background: #fff7f8;
+  color: #b4233c;
+  font-weight: 900;
+  padding: 10px 14px;
+  text-decoration: none;
+}
+
+.withdrawal-link:hover {
+  background: #ffecef;
+}
+
+.withdrawal-form label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.withdrawal-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.withdrawal-row input {
+  width: 100%;
+  border: 1px solid #f1c2ca;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.withdrawal-row button {
+  border: none;
+  border-radius: 10px;
+  background: #d92d47;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 900;
+  padding: 10px 14px;
+}
+
+.withdrawal-row button:disabled {
+  background: #e8a7b2;
+  cursor: not-allowed;
+}
+
+.withdrawal-page {
+  margin-top: 22px;
+}
+
+.withdrawal-panel {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  display: grid;
+  gap: 14px;
+  max-width: 720px;
+  padding: 24px;
+}
+
+.withdrawal-panel h1 {
+  margin-bottom: 0;
+}
+
+.withdrawal-warning-list {
+  border: 1px solid #f5d0d6;
+  border-radius: 14px;
+  background: #fff8f9;
+  color: #61313a;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 16px 16px 16px 34px;
+}
+
 .mypage-list {
   list-style: none;
   margin: 0;
@@ -1687,5 +1781,13 @@ h2 {
   .favorites-empty {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .withdrawal-row {
+    grid-template-columns: 1fr;
+  }
+
+  .withdrawal-row button {
+    width: 100%;
   }
 }
