@@ -90,6 +90,7 @@ export type FavoriteWebtoon = {
   title: string;
   author: string;
   thumbnailUrl: string | null;
+  status?: string;
   statusName: string;
   originalUrl: string;
   weekdays: CodeName[];

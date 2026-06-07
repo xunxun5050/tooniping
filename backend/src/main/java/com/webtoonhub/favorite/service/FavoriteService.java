@@ -125,6 +125,7 @@ public class FavoriteService {
                 row.title(),
                 row.author(),
                 row.thumbnailUrl(),
+                row.status(),
                 toStatusName(row.status()),
                 row.originalUrl(),
                 weekdaysByWebtoonId.getOrDefault(row.id(), List.of()),

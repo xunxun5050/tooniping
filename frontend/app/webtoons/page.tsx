@@ -9,10 +9,10 @@ const MAX_PAGE_SIZE = 100;
 const SORT_OPTIONS = [
   { code: "popular", name: "인기순" },
   { code: "latest", name: "최신순" },
-  { code: "updated", name: "업데이트순" },
   { code: "title", name: "제목순" },
   { code: "weekday", name: "요일순" }
 ];
+const SORT_OPTION_CODES = new Set(SORT_OPTIONS.map((option) => option.code));
 const WEEKDAY_BY_ENGLISH_NAME: Record<string, string> = {
   Monday: "MONDAY",
   Tuesday: "TUESDAY",
@@ -51,6 +51,13 @@ function normalizeSize(rawSize: string): number {
     return DEFAULT_PAGE_SIZE;
   }
   return parsed;
+}
+
+function normalizeSort(rawSort: string): string {
+  if (!rawSort || !SORT_OPTION_CODES.has(rawSort)) {
+    return "popular";
+  }
+  return rawSort;
 }
 
 function getTodayWeekdayCodeInSeoul(): string {
@@ -99,11 +106,13 @@ export default async function WebtoonsPage({ searchParams }: Props) {
   const resolvedSearchParams = await searchParams;
   const keyword = pick(resolvedSearchParams, "keyword");
   const rawWeekday = pick(resolvedSearchParams, "weekday");
-  const weekday = rawWeekday === "ALL" ? "" : rawWeekday;
+  const shouldConvertCompletedWeekday = rawWeekday === "COMPLETED";
+  const weekday = rawWeekday === "ALL" || shouldConvertCompletedWeekday ? "" : rawWeekday;
   const genre = pick(resolvedSearchParams, "genre");
-  const status = pick(resolvedSearchParams, "status");
+  const rawStatus = pick(resolvedSearchParams, "status");
+  const status = shouldConvertCompletedWeekday && !rawStatus ? "COMPLETED" : rawStatus;
   const rawSort = pick(resolvedSearchParams, "sort");
-  const sort = rawSort || "popular";
+  const sort = normalizeSort(rawSort);
   const rawPage = pick(resolvedSearchParams, "page");
   const rawSize = pick(resolvedSearchParams, "size");
   const page = normalizePage(rawPage || "0");
@@ -124,13 +133,18 @@ export default async function WebtoonsPage({ searchParams }: Props) {
     shouldRedirect = true;
   }
 
-  if (!rawSort) {
+  if (!rawSort || rawSort !== sort) {
     canonicalParams.set("sort", sort);
     shouldRedirect = true;
   }
 
-  if (rawWeekday === "ALL") {
+  if (rawWeekday === "ALL" || shouldConvertCompletedWeekday) {
     canonicalParams.delete("weekday");
+    shouldRedirect = true;
+  }
+
+  if (shouldConvertCompletedWeekday && !rawStatus) {
+    canonicalParams.set("status", "COMPLETED");
     shouldRedirect = true;
   }
 
@@ -158,6 +172,7 @@ export default async function WebtoonsPage({ searchParams }: Props) {
   ]);
 
   const hasPrev = list.page > 0;
+  const weekdayOptions = filters.weekdays.filter((option) => option.code !== "COMPLETED");
 
   return (
     <section className="list-page">
@@ -202,7 +217,7 @@ export default async function WebtoonsPage({ searchParams }: Props) {
           />
           <FilterGroup
             title="요일"
-            options={filters.weekdays}
+            options={weekdayOptions}
             selectedCode={effectiveWeekday}
             showAll={false}
             makeHref={(code) => buildQuery(resolvedSearchParams, { weekday: code, page: "" })}

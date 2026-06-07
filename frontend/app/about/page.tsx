@@ -15,7 +15,7 @@ const features = [
   },
   {
     title: "내 서재에 담아두기",
-    description: "마음에 드는 작품은 하트로 저장하고, 우측 상단 닉네임에서 요일별 즐겨찾기로 다시 볼 수 있습니다."
+    description: "마음에 드는 작품은 하트로 저장하고, 우측 상단 닉네임에서 연재중 즐겨찾기를 요일별로 다시 볼 수 있습니다."
   }
 ];
 
@@ -34,7 +34,7 @@ export default function AboutPage() {
           <Link className="source-btn" href="/webtoons?sort=popular">
             인기 웹툰 보기
           </Link>
-          <Link className="secondary-btn" href="/mypage">
+          <Link className="secondary-btn" href="/favorites">
             내 서재 가기
           </Link>
         </div>

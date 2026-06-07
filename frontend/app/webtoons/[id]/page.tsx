@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { DetailFavoriteButton } from "@/components/DetailFavoriteButton";
 import { WebtoonCard } from "@/components/WebtoonCard";
 import { fetchApi } from "@/lib/api";
 import { WebtoonCard as WebtoonCardType, WebtoonDetail } from "@/lib/types";
@@ -30,6 +31,19 @@ export default async function WebtoonDetailPage({ params }: Props) {
   }
 
   const thumbnail = detail.thumbnail.storedUrl || detail.thumbnail.sourceUrl;
+  const detailFavoriteWebtoon: WebtoonCardType = {
+    id: detail.id,
+    title: detail.title,
+    author: detail.author,
+    description: detail.description ?? "",
+    platform: detail.platform,
+    genres: detail.genres,
+    weekdays: detail.weekdays,
+    status: detail.status,
+    statusName: detail.statusName,
+    thumbnailUrl: thumbnail,
+    originalUrl: detail.originalUrl
+  };
 
   return (
     <section className="detail-page">
@@ -66,9 +80,12 @@ export default async function WebtoonDetailPage({ params }: Props) {
             </div>
           </dl>
 
-          <a className="source-btn large" href={detail.originalUrl} target="_blank" rel="noreferrer">
-            {detail.platform.name} 바로가기
-          </a>
+          <div className="detail-actions">
+            <DetailFavoriteButton webtoon={detailFavoriteWebtoon} />
+            <a className="source-btn large" href={detail.originalUrl} target="_blank" rel="noreferrer">
+              {detail.platform.name} 바로가기
+            </a>
+          </div>
         </div>
       </article>
 

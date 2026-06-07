@@ -26,6 +26,10 @@ public class UserProfileService {
     private static final String[] ROLES = {
         "탐정", "기사", "마법사", "선장", "박사", "작가", "연금술사", "수집가", "연구원", "감독"
     };
+    private static final String[] FALLBACK_NICKNAMES = {
+        "웹툰탐험가", "웹툰수집가", "웹툰항해자", "웹툰연구원", "웹툰감별사",
+        "만화방지기", "별빛독자", "쿠키수호자", "장면수집가", "페이지여행자"
+    };
 
     private final NamedParameterJdbcTemplate jdbc;
     private final SecureRandom random = new SecureRandom();
@@ -160,13 +164,17 @@ public class UserProfileService {
         for (int attempt = 0; attempt < MAX_GENERATE_ATTEMPTS; attempt++) {
             String nickname = MOODS[random.nextInt(MOODS.length)]
                 + OBJECTS[random.nextInt(OBJECTS.length)]
-                + ROLES[random.nextInt(ROLES.length)]
-                + random.nextInt(1000);
+                + ROLES[random.nextInt(ROLES.length)];
             if (!nicknameExists(nickname)) {
                 return nickname;
             }
         }
-        return "웹툰탐험가" + System.currentTimeMillis() % 100000;
+        for (String nickname : FALLBACK_NICKNAMES) {
+            if (!nicknameExists(nickname)) {
+                return nickname;
+            }
+        }
+        throw new BadRequestException("사용 가능한 자동 닉네임을 만들지 못했습니다.");
     }
 
     private boolean nicknameExists(String nickname) {

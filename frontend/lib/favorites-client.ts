@@ -35,6 +35,7 @@ function isFavoriteWebtoon(value: unknown): value is FavoriteWebtoon {
     typeof favorite.title === "string" &&
     typeof favorite.author === "string" &&
     (typeof favorite.thumbnailUrl === "string" || favorite.thumbnailUrl === null) &&
+    (typeof favorite.status === "string" || typeof favorite.status === "undefined") &&
     typeof favorite.statusName === "string" &&
     typeof favorite.originalUrl === "string" &&
     typeof favorite.addedAt === "string"
@@ -116,6 +117,7 @@ function toFavoriteWebtoon(webtoon: WebtoonCard): FavoriteWebtoon {
     title: webtoon.title,
     author: webtoon.author || "작가 미상",
     thumbnailUrl: webtoon.thumbnailUrl,
+    status: webtoon.status,
     statusName: webtoon.statusName,
     originalUrl: webtoon.originalUrl,
     weekdays: webtoon.weekdays,

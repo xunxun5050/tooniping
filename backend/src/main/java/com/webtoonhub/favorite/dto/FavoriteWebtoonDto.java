@@ -8,6 +8,7 @@ public record FavoriteWebtoonDto(
     String title,
     String author,
     String thumbnailUrl,
+    String status,
     String statusName,
     String originalUrl,
     List<CodeNameDto> weekdays,
