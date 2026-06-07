@@ -263,12 +263,13 @@ public class WebtoonQueryRepository {
         }
 
         String similarIdSql = """
-            SELECT DISTINCT w.id
+            SELECT w.id
             FROM webtoons w
             JOIN webtoon_genres wg ON wg.webtoon_id = w.id
             WHERE w.is_active = TRUE
               AND w.id <> :webtoonId
               AND wg.genre_id IN (:genreIds)
+            GROUP BY w.id, w.updated_at
             ORDER BY w.updated_at DESC, w.id DESC
             LIMIT :size
             """;
