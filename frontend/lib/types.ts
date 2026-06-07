@@ -93,6 +93,7 @@ export type FavoriteWebtoon = {
   status?: string;
   statusName: string;
   originalUrl: string;
+  genres?: CodeName[];
   weekdays: CodeName[];
   addedAt: string;
 };

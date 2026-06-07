@@ -38,6 +38,7 @@ function isFavoriteWebtoon(value: unknown): value is FavoriteWebtoon {
     (typeof favorite.status === "string" || typeof favorite.status === "undefined") &&
     typeof favorite.statusName === "string" &&
     typeof favorite.originalUrl === "string" &&
+    (Array.isArray(favorite.genres) || typeof favorite.genres === "undefined") &&
     typeof favorite.addedAt === "string"
   );
 }
@@ -53,6 +54,7 @@ function isCodeName(value: unknown): value is CodeName {
 function normalizeFavoriteWebtoon(item: FavoriteWebtoon): FavoriteWebtoon {
   return {
     ...item,
+    genres: Array.isArray(item.genres) ? item.genres.filter(isCodeName) : [],
     weekdays: Array.isArray(item.weekdays) ? item.weekdays.filter(isCodeName) : []
   };
 }
@@ -120,6 +122,7 @@ function toFavoriteWebtoon(webtoon: WebtoonCard): FavoriteWebtoon {
     status: webtoon.status,
     statusName: webtoon.statusName,
     originalUrl: webtoon.originalUrl,
+    genres: webtoon.genres,
     weekdays: webtoon.weekdays,
     addedAt: new Date().toISOString()
   };

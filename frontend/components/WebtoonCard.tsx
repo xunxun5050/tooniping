@@ -10,6 +10,7 @@ import {
   isFavoriteWebtoonById,
   toggleFavoriteWebtoonRemote
 } from "@/lib/favorites-client";
+import { toPlatformStyleClass } from "@/lib/platform-style";
 import { WebtoonCard as WebtoonCardType } from "@/lib/types";
 
 type Props = {
@@ -52,7 +53,8 @@ export function WebtoonCard({
   const genresText = webtoon.genres.map((genre) => genre.name).join(" · ");
   const weekdaysText = webtoon.weekdays.map((day) => day.name).join(" · ");
   const compactMeta = weekdaysText || genresText || webtoon.statusName;
-  const cardClassName = ["webtoon-card", "reveal", compact ? "compact" : "", className ?? ""]
+  const platformStyleClass = toPlatformStyleClass(webtoon.platform.code);
+  const cardClassName = ["webtoon-card", "reveal", platformStyleClass, compact ? "compact" : "", className ?? ""]
     .filter(Boolean)
     .join(" ");
 
@@ -123,7 +125,7 @@ export function WebtoonCard({
         </div>
       </Link>
       {showSourceButton ? (
-        <a className="source-btn" href={webtoon.originalUrl} target="_blank" rel="noreferrer">
+        <a className={`source-btn webtoon-source-btn ${platformStyleClass}`} href={webtoon.originalUrl} target="_blank" rel="noreferrer">
           {webtoon.platform.name} 바로가기
         </a>
       ) : null}

@@ -6,24 +6,26 @@ import { AUTH_SESSION_CHANGED_EVENT, AuthSession, clearAuthSession, readAuthSess
 import {
   FavoriteApiError,
   clearFavoriteWebtoons,
+  replaceFavoriteWebtoons,
   readFavoriteWebtoons,
   syncFavoriteWebtoonsFromServer
 } from "@/lib/favorites-client";
-import { FavoriteWebtoon } from "@/lib/types";
+import { ApiResponse, CodeName, FavoriteWebtoon, WebtoonDetail } from "@/lib/types";
 
-const WEEKDAY_GROUPS = [
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+const CALENDAR_WEEKDAYS = [
   { code: "MONDAY", name: "월요일" },
   { code: "TUESDAY", name: "화요일" },
   { code: "WEDNESDAY", name: "수요일" },
   { code: "THURSDAY", name: "목요일" },
   { code: "FRIDAY", name: "금요일" },
   { code: "SATURDAY", name: "토요일" },
-  { code: "SUNDAY", name: "일요일" },
-  { code: "DAILY_PLUS", name: "매일+" },
-  { code: "UNKNOWN", name: "요일 미정" }
+  { code: "SUNDAY", name: "일요일" }
 ];
 
-type FavoriteWeekdayGroup = {
+type FavoriteViewMode = "weekday" | "genre";
+
+type FavoriteGroup = {
   code: string;
   name: string;
   items: FavoriteWebtoon[];
@@ -33,32 +35,85 @@ function isOngoingFavorite(item: FavoriteWebtoon): boolean {
   return item.status === "ONGOING" || item.statusName === "연재중";
 }
 
-function groupOngoingFavorites(favorites: FavoriteWebtoon[]): FavoriteWeekdayGroup[] {
-  const groups = new Map<string, FavoriteWeekdayGroup>(
-    WEEKDAY_GROUPS.map((group) => [group.code, { ...group, items: [] }])
+async function fetchFavoriteGenres(webtoonId: number): Promise<CodeName[]> {
+  const response = await fetch(`${API_BASE_URL}/api/webtoons/${webtoonId}`);
+  if (!response.ok) {
+    return [];
+  }
+
+  const payload = (await response.json()) as ApiResponse<WebtoonDetail>;
+  return payload.success ? payload.data.genres : [];
+}
+
+async function enrichFavoritesWithGenres(favorites: FavoriteWebtoon[]): Promise<FavoriteWebtoon[]> {
+  const ongoingFavorites = favorites.filter(isOngoingFavorite);
+  const favoritesMissingGenres = ongoingFavorites.filter((favorite) => !favorite.genres || favorite.genres.length === 0);
+
+  if (favoritesMissingGenres.length === 0) {
+    return favorites;
+  }
+
+  const genreEntries = await Promise.all(
+    favoritesMissingGenres.map(async (favorite) => {
+      try {
+        return [favorite.id, await fetchFavoriteGenres(favorite.id)] as const;
+      } catch {
+        return [favorite.id, [] as CodeName[]] as const;
+      }
+    })
+  );
+  const genresByWebtoonId = new Map(genreEntries);
+
+  return favorites.map((favorite) => {
+    const genres = genresByWebtoonId.get(favorite.id);
+    return genres ? { ...favorite, genres } : favorite;
+  });
+}
+
+function groupOngoingFavoritesByWeekday(favorites: FavoriteWebtoon[]): FavoriteGroup[] {
+  const groups = new Map<string, FavoriteGroup>(
+    CALENDAR_WEEKDAYS.map((group) => [group.code, { ...group, items: [] }])
   );
 
   for (const favorite of favorites.filter(isOngoingFavorite)) {
-    const visibleWeekdays = favorite.weekdays.filter((weekday) => weekday.code !== "COMPLETED");
-    const weekdays = visibleWeekdays.length > 0 ? visibleWeekdays : [{ code: "UNKNOWN", name: "요일 미정" }];
+    const weekdayCodes = favorite.weekdays.map((weekday) => weekday.code);
+    const targetWeekdays = weekdayCodes.includes("DAILY_PLUS")
+      ? CALENDAR_WEEKDAYS
+      : CALENDAR_WEEKDAYS.filter((weekday) => weekdayCodes.includes(weekday.code));
 
-    for (const weekday of weekdays) {
-      if (!groups.has(weekday.code)) {
-        groups.set(weekday.code, { code: weekday.code, name: weekday.name, items: [] });
-      }
+    for (const weekday of targetWeekdays) {
       groups.get(weekday.code)?.items.push(favorite);
     }
   }
 
-  return Array.from(groups.values()).filter((group) => group.items.length > 0);
+  return Array.from(groups.values());
+}
+
+function groupOngoingFavoritesByGenre(favorites: FavoriteWebtoon[]): FavoriteGroup[] {
+  const groups = new Map<string, FavoriteGroup>();
+
+  for (const favorite of favorites.filter(isOngoingFavorite)) {
+    const genres = favorite.genres && favorite.genres.length > 0 ? favorite.genres : [{ code: "UNKNOWN", name: "장르 미정" }];
+
+    for (const genre of genres) {
+      if (!groups.has(genre.code)) {
+        groups.set(genre.code, { code: genre.code, name: genre.name, items: [] });
+      }
+      groups.get(genre.code)?.items.push(favorite);
+    }
+  }
+
+  return Array.from(groups.values()).sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name, "ko"));
 }
 
 export default function FavoritesPage() {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [favoriteWebtoons, setFavoriteWebtoons] = useState<FavoriteWebtoon[]>([]);
+  const [viewMode, setViewMode] = useState<FavoriteViewMode>("weekday");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const favoriteGroups = useMemo(() => groupOngoingFavorites(favoriteWebtoons), [favoriteWebtoons]);
+  const weekdayGroups = useMemo(() => groupOngoingFavoritesByWeekday(favoriteWebtoons), [favoriteWebtoons]);
+  const genreGroups = useMemo(() => groupOngoingFavoritesByGenre(favoriteWebtoons), [favoriteWebtoons]);
   const ongoingCount = useMemo(() => favoriteWebtoons.filter(isOngoingFavorite).length, [favoriteWebtoons]);
 
   useEffect(() => {
@@ -91,8 +146,10 @@ export default function FavoritesPage() {
       setIsLoading(true);
       try {
         const favorites = await syncFavoriteWebtoonsFromServer(session);
+        const enrichedFavorites = await enrichFavoritesWithGenres(favorites);
         if (active) {
-          setFavoriteWebtoons(favorites);
+          setFavoriteWebtoons(enrichedFavorites);
+          replaceFavoriteWebtoons(enrichedFavorites);
         }
       } catch (loadError) {
         if (!active) {
@@ -105,7 +162,8 @@ export default function FavoritesPage() {
           setFavoriteWebtoons([]);
           setError("로그인이 만료되었습니다. 다시 로그인해 주세요.");
         } else {
-          setFavoriteWebtoons(readFavoriteWebtoons());
+          const cachedFavorites = readFavoriteWebtoons();
+          setFavoriteWebtoons(cachedFavorites);
           setError("즐겨찾기 목록을 불러오지 못했습니다.");
         }
       } finally {
@@ -143,15 +201,32 @@ export default function FavoritesPage() {
         <div>
           <p className="eyebrow">MY LIBRARY</p>
           <h1>연재중 즐겨찾기</h1>
-          <p className="description">즐겨찾기한 작품 중 현재 연재중인 웹툰만 요일별로 모았습니다.</p>
+          <p className="description">즐겨찾기한 작품 중 현재 연재중인 웹툰을 요일별, 장르별로 모았습니다.</p>
         </div>
         <strong>{ongoingCount}개</strong>
+      </div>
+
+      <div className="favorites-view-toggle reveal" role="group" aria-label="내 서재 보기 방식">
+        <button
+          className={viewMode === "weekday" ? "active" : ""}
+          type="button"
+          onClick={() => setViewMode("weekday")}
+        >
+          요일별
+        </button>
+        <button
+          className={viewMode === "genre" ? "active" : ""}
+          type="button"
+          onClick={() => setViewMode("genre")}
+        >
+          장르별
+        </button>
       </div>
 
       {error ? <p className="favorites-message">{error}</p> : null}
       {isLoading ? <p className="favorites-message">불러오는 중...</p> : null}
 
-      {!isLoading && favoriteGroups.length === 0 ? (
+      {!isLoading && ongoingCount === 0 ? (
         <div className="favorites-empty reveal">
           <p>연재중 즐겨찾기 웹툰이 아직 없습니다.</p>
           <Link className="source-btn" href="/webtoons?sort=popular">
@@ -160,33 +235,67 @@ export default function FavoritesPage() {
         </div>
       ) : null}
 
-      <div className="favorite-day-grid">
-        {favoriteGroups.map((group) => (
-          <section className="favorite-day-section reveal" key={group.code}>
-            <div className="favorite-day-head">
-              <h2>{group.name}</h2>
-              <span>{group.items.length}</span>
-            </div>
-            <div className="favorite-day-list">
-              {group.items.map((item) => (
-                <Link className="favorite-day-item" href={`/webtoons/${item.id}`} key={`${group.code}-${item.id}`}>
-                  <div className="favorite-day-thumb-wrap">
-                    {item.thumbnailUrl ? (
-                      <img className="favorite-day-thumb" src={item.thumbnailUrl} alt={item.title} />
-                    ) : (
-                      <div className="favorite-day-thumb placeholder">NO IMAGE</div>
-                    )}
-                  </div>
-                  <div>
-                    <strong>{item.title}</strong>
-                    <p>{item.author || "작가 미상"}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
+      {!isLoading && ongoingCount > 0 && viewMode === "weekday" ? <FavoriteWeekdayCalendar groups={weekdayGroups} /> : null}
+      {!isLoading && ongoingCount > 0 && viewMode === "genre" ? <FavoriteGenreGroups groups={genreGroups} /> : null}
     </section>
+  );
+}
+
+function FavoriteWeekdayCalendar({ groups }: { groups: FavoriteGroup[] }) {
+  return (
+    <div className="favorite-calendar-grid">
+      {groups.map((group) => (
+        <section className="favorite-calendar-column reveal" key={group.code}>
+          <div className="favorite-calendar-head">
+            <h2>{group.name.replace("요일", "")}</h2>
+            <span>{group.items.length}</span>
+          </div>
+          <div className="favorite-calendar-list">
+            {group.items.length === 0 ? <p className="favorite-calendar-empty">비어 있음</p> : null}
+            {group.items.map((item) => (
+              <FavoriteListItem item={item} key={`${group.code}-${item.id}`} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function FavoriteGenreGroups({ groups }: { groups: FavoriteGroup[] }) {
+  return (
+    <div className="favorite-genre-grid">
+      {groups.map((group) => (
+        <section className="favorite-genre-section reveal" key={group.code}>
+          <div className="favorite-day-head">
+            <h2>{group.name}</h2>
+            <span>{group.items.length}</span>
+          </div>
+          <div className="favorite-day-list">
+            {group.items.map((item) => (
+              <FavoriteListItem item={item} key={`${group.code}-${item.id}`} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function FavoriteListItem({ item }: { item: FavoriteWebtoon }) {
+  return (
+    <Link className="favorite-day-item" href={`/webtoons/${item.id}`}>
+      <div className="favorite-day-thumb-wrap">
+        {item.thumbnailUrl ? (
+          <img className="favorite-day-thumb" src={item.thumbnailUrl} alt={item.title} />
+        ) : (
+          <div className="favorite-day-thumb placeholder">NO IMAGE</div>
+        )}
+      </div>
+      <div>
+        <strong>{item.title}</strong>
+        <p>{item.author || "작가 미상"}</p>
+      </div>
+    </Link>
   );
 }
