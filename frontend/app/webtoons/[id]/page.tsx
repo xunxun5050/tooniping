@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DetailFavoriteButton } from "@/components/DetailFavoriteButton";
+import { WebtoonEvaluationForm } from "@/components/WebtoonEvaluationForm";
 import { WebtoonCard } from "@/components/WebtoonCard";
 import { fetchApi } from "@/lib/api";
 import { toPlatformStyleClass } from "@/lib/platform-style";
@@ -90,6 +91,8 @@ export default async function WebtoonDetailPage({ params }: Props) {
           </div>
         </div>
       </article>
+
+      <WebtoonEvaluationForm webtoon={detailFavoriteWebtoon} />
 
       {similar.length > 0 ? (
         <section className="quick-nav reveal">

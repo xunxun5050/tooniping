@@ -83,7 +83,7 @@ export default function WithdrawalPage() {
         <div className="withdrawal-panel reveal">
           <p className="eyebrow">ACCOUNT</p>
           <h1>회원 탈퇴 완료</h1>
-          <p className="description">계정 정보와 저장한 즐겨찾기를 정리했습니다.</p>
+          <p className="description">계정 정보와 저장한 즐겨찾기, 웹툰 평가를 정리했습니다.</p>
           <Link className="source-btn" href="/">
             메인으로 이동
           </Link>
@@ -116,10 +116,11 @@ export default function WithdrawalPage() {
         </Link>
         <p className="eyebrow">ACCOUNT</p>
         <h1>회원 탈퇴</h1>
-        <p className="description">탈퇴하면 프로필과 저장한 즐겨찾기가 삭제되고 현재 세션에서 로그아웃됩니다.</p>
+        <p className="description">탈퇴하면 프로필, 즐겨찾기, 웹툰 평가가 삭제되고 현재 세션에서 로그아웃됩니다.</p>
 
         <ul className="withdrawal-warning-list">
           <li>즐겨찾기한 웹툰 목록이 삭제됩니다.</li>
+          <li>상세 페이지에서 남긴 웹툰 평가가 삭제됩니다.</li>
           <li>자동 생성 또는 수정한 닉네임 정보가 삭제됩니다.</li>
           <li>탈퇴 후 같은 소셜 계정으로 다시 로그인하면 새 프로필이 생성됩니다.</li>
         </ul>

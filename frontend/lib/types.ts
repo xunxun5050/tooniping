@@ -97,3 +97,16 @@ export type FavoriteWebtoon = {
   weekdays: CodeName[];
   addedAt: string;
 };
+
+export type WebtoonRating = "SSS" | "S" | "A" | "B" | "C" | "D" | "F";
+
+export type WebtoonEvaluation = {
+  webtoonId: number;
+  title: string;
+  author: string;
+  thumbnailUrl: string | null;
+  rating: WebtoonRating;
+  emotionTags: string[];
+  createdAt: string;
+  updatedAt: string;
+};

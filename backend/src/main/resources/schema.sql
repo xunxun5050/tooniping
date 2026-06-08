@@ -150,3 +150,15 @@ CREATE TABLE IF NOT EXISTS user_favorite_webtoons (
     CONSTRAINT fk_user_favorite_webtoons_webtoon
         FOREIGN KEY (webtoon_id) REFERENCES webtoons(id)
 );
+
+CREATE TABLE IF NOT EXISTS user_webtoon_evaluations (
+    username VARCHAR(100) NOT NULL,
+    webtoon_id BIGINT NOT NULL,
+    rating VARCHAR(10) NOT NULL,
+    emotion_tags VARCHAR(255) NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    PRIMARY KEY (username, webtoon_id),
+    CONSTRAINT fk_user_webtoon_evaluations_webtoon
+        FOREIGN KEY (webtoon_id) REFERENCES webtoons(id)
+);

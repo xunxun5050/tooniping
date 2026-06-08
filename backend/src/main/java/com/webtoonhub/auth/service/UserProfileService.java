@@ -126,6 +126,7 @@ public class UserProfileService {
         MapSqlParameterSource params = new MapSqlParameterSource("username", normalizedUsername);
 
         jdbc.update("DELETE FROM user_favorite_webtoons WHERE username = :username", params);
+        jdbc.update("DELETE FROM user_webtoon_evaluations WHERE username = :username", params);
         jdbc.update("DELETE FROM user_profiles WHERE username = :username", params);
     }
 

@@ -16,7 +16,13 @@ import {
   readFavoriteWebtoons,
   syncFavoriteWebtoonsFromServer
 } from "@/lib/favorites-client";
-import { ApiResponse, AuthMeResponse, FavoriteWebtoon } from "@/lib/types";
+import {
+  EvaluationApiError,
+  WEBTOON_EMOTION_TAG_META,
+  WEBTOON_RATING_META,
+  getWebtoonEvaluations
+} from "@/lib/evaluations-client";
+import { ApiResponse, AuthMeResponse, FavoriteWebtoon, WebtoonEvaluation } from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
@@ -51,7 +57,7 @@ const MY_ACTIVITY_ITEMS = [
   }
 ];
 
-function formatFavoriteAddedAt(value: string): string {
+function formatDateTime(value: string): string {
   const timestamp = Date.parse(value);
   if (Number.isNaN(timestamp)) {
     return "-";
@@ -62,6 +68,7 @@ function formatFavoriteAddedAt(value: string): string {
 export default function MyPage() {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [favoriteWebtoons, setFavoriteWebtoons] = useState<FavoriteWebtoon[]>([]);
+  const [evaluations, setEvaluations] = useState<WebtoonEvaluation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [nicknameInput, setNicknameInput] = useState("");
   const [nicknameMessage, setNicknameMessage] = useState<string | null>(null);
@@ -100,6 +107,7 @@ export default function MyPage() {
   useEffect(() => {
     if (!session) {
       setFavoriteWebtoons([]);
+      setEvaluations([]);
       clearFavoriteWebtoons();
       return;
     }
@@ -130,6 +138,45 @@ export default function MyPage() {
     }
 
     loadFavoritesFromServer();
+
+    return () => {
+      active = false;
+    };
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) {
+      setEvaluations([]);
+      return;
+    }
+
+    const currentSession = session;
+    let active = true;
+
+    async function loadEvaluationsFromServer() {
+      try {
+        const savedEvaluations = await getWebtoonEvaluations(currentSession);
+        if (active) {
+          setEvaluations(savedEvaluations);
+        }
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        if (error instanceof EvaluationApiError && error.status === 401) {
+          clearAuthSession();
+          clearFavoriteWebtoons();
+          setEvaluations([]);
+          setError("로그인이 만료되었습니다. 다시 로그인해 주세요.");
+          return;
+        }
+
+        setError("웹툰 평가 목록을 불러오지 못했습니다.");
+      }
+    }
+
+    loadEvaluationsFromServer();
 
     return () => {
       active = false;
@@ -314,7 +361,55 @@ export default function MyPage() {
                       <strong>{item.title}</strong>
                       <p>{item.author}</p>
                       <p>{item.statusName}</p>
-                      <p>추가일: {formatFavoriteAddedAt(item.addedAt)}</p>
+                      <p>추가일: {formatDateTime(item.addedAt)}</p>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="mypage-card reveal">
+          <div className="mypage-card-head">
+            <h2>내 웹툰 평가</h2>
+            <strong>{evaluations.length}개</strong>
+          </div>
+          {evaluations.length === 0 ? (
+            <p className="description">상세 페이지에서 레이팅과 감정 태그를 남겨 보세요.</p>
+          ) : (
+            <ul className="mypage-evaluation-list">
+              {evaluations.map((item) => (
+                <li key={item.webtoonId}>
+                  <Link href={`/webtoons/${item.webtoonId}`} className="mypage-evaluation-link">
+                    <div className="mypage-favorite-thumb-wrap">
+                      {item.thumbnailUrl ? (
+                        <img className="mypage-favorite-thumb" src={item.thumbnailUrl} alt={item.title} />
+                      ) : (
+                        <div className="mypage-favorite-thumb placeholder">NO IMAGE</div>
+                      )}
+                    </div>
+                    <div className="mypage-evaluation-meta">
+                      <div className="mypage-evaluation-title-row">
+                        <strong>{item.title}</strong>
+                        <span className={`mypage-rating-badge rating-${WEBTOON_RATING_META[item.rating].tone}`}>
+                          <span aria-hidden="true">{WEBTOON_RATING_META[item.rating].icon}</span>
+                          {item.rating}
+                        </span>
+                      </div>
+                      <p>{item.author}</p>
+                      <div className="mypage-evaluation-tags" aria-label={`${item.title} 감정 태그`}>
+                        {item.emotionTags.map((tag) => {
+                          const meta = WEBTOON_EMOTION_TAG_META[tag] ?? { emoji: "•", label: tag };
+                          return (
+                            <span key={tag}>
+                              <span aria-hidden="true">{meta.emoji}</span>
+                              {meta.label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <p>최근 수정: {formatDateTime(item.updatedAt)}</p>
                     </div>
                   </Link>
                 </li>
@@ -343,7 +438,7 @@ export default function MyPage() {
           <div className="withdrawal-entry">
             <div>
               <strong>회원 탈퇴</strong>
-              <p className="description">프로필과 저장한 즐겨찾기 삭제는 별도 확인 페이지에서 진행합니다.</p>
+              <p className="description">프로필, 즐겨찾기, 웹툰 평가는 별도 확인 페이지에서 삭제합니다.</p>
             </div>
             <Link className="withdrawal-link" href="/mypage/withdrawal">
               탈퇴 페이지로 이동
