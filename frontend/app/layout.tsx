@@ -21,7 +21,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </Link>
           <nav>
             <HeaderSearch />
-            <Link href="/webtoons">목록</Link>
             <Link href="/about">소개</Link>
             <AuthMenu />
           </nav>

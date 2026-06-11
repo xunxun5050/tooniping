@@ -6,6 +6,7 @@ import {
   AUTH_SESSION_CHANGED_EVENT,
   AuthSession,
   clearAuthSession,
+  getAuthSession,
   readAuthSession
 } from "@/lib/auth-client";
 import { clearFavoriteWebtoons } from "@/lib/favorites-client";
@@ -21,15 +22,23 @@ export default function WithdrawalPage() {
   const [isComplete, setIsComplete] = useState(false);
 
   useEffect(() => {
+    let active = true;
+
     function syncSession() {
       setSession(readAuthSession());
     }
 
     syncSession();
+    getAuthSession().then((nextSession) => {
+      if (active) {
+        setSession(nextSession);
+      }
+    });
     window.addEventListener("storage", syncSession);
     window.addEventListener(AUTH_SESSION_CHANGED_EVENT, syncSession as EventListener);
 
     return () => {
+      active = false;
       window.removeEventListener("storage", syncSession);
       window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, syncSession as EventListener);
     };
@@ -47,6 +56,7 @@ export default function WithdrawalPage() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
         method: "DELETE",
+        credentials: "include",
         headers: {
           Authorization: `${session.tokenType} ${session.token}`
         }

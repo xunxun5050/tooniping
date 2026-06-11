@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { AUTH_SESSION_CHANGED_EVENT, AuthSession, clearAuthSession, readAuthSession } from "@/lib/auth-client";
+import { AUTH_SESSION_CHANGED_EVENT, AuthSession, clearAuthSession, getAuthSession, readAuthSession } from "@/lib/auth-client";
 import {
   FavoriteApiError,
   clearFavoriteWebtoons,
@@ -117,15 +117,23 @@ export default function FavoritesPage() {
   const ongoingCount = useMemo(() => favoriteWebtoons.filter(isOngoingFavorite).length, [favoriteWebtoons]);
 
   useEffect(() => {
+    let active = true;
+
     function syncSession() {
       setSession(readAuthSession());
     }
 
     syncSession();
+    getAuthSession().then((nextSession) => {
+      if (active) {
+        setSession(nextSession);
+      }
+    });
     window.addEventListener("storage", syncSession);
     window.addEventListener(AUTH_SESSION_CHANGED_EVENT, syncSession as EventListener);
 
     return () => {
+      active = false;
       window.removeEventListener("storage", syncSession);
       window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, syncSession as EventListener);
     };
@@ -200,8 +208,7 @@ export default function FavoritesPage() {
       <div className="favorites-head reveal">
         <div>
           <p className="eyebrow">MY LIBRARY</p>
-          <h1>연재중 즐겨찾기</h1>
-          <p className="description">즐겨찾기한 작품 중 현재 연재중인 웹툰을 요일별, 장르별로 모았습니다.</p>
+          <h1>내 서재</h1>
         </div>
         <strong>{ongoingCount}개</strong>
       </div>

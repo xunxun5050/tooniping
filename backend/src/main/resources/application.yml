@@ -1,4 +1,9 @@
 spring:
+  config:
+    import:
+      - optional:file:../oauth.env[.properties]
+      - optional:file:./oauth.env[.properties]
+      - optional:file:./backend/oauth.env[.properties]
   application:
     name: webtoon-hub-backend
   datasource:
@@ -6,6 +11,17 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS_ENABLE:true}
   sql:
     init:
       mode: always
@@ -19,6 +35,11 @@ app:
     password: ${APP_AUTH_PASSWORD:admin1234}
     secret: ${APP_AUTH_SECRET:webtoon-hub-secret-key-change-this}
     token-valid-minutes: ${APP_AUTH_TOKEN_VALID_MINUTES:480}
+    refresh-token-valid-days: ${APP_AUTH_REFRESH_TOKEN_VALID_DAYS:30}
+    email-verification:
+      from: ${APP_AUTH_EMAIL_VERIFICATION_FROM:no-reply@tooniping.app}
+      expire-minutes: ${APP_AUTH_EMAIL_VERIFICATION_EXPIRE_MINUTES:10}
+      max-attempts: ${APP_AUTH_EMAIL_VERIFICATION_MAX_ATTEMPTS:5}
     oauth:
       frontend-base-url: ${APP_AUTH_OAUTH_FRONTEND_BASE_URL:http://localhost:3000}
       kakao:

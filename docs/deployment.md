@@ -35,6 +35,20 @@ APP_AUTH_TOKEN_VALID_MINUTES=480
 APP_AUTH_OAUTH_FRONTEND_BASE_URL=https://<프론트엔드 도메인>
 ```
 
+이메일 회원가입 인증 사용 시 필수:
+
+```bash
+MAIL_HOST=<SMTP 서버 호스트>
+MAIL_PORT=587
+MAIL_USERNAME=<SMTP 계정>
+MAIL_PASSWORD=<SMTP 비밀번호 또는 앱 비밀번호>
+MAIL_SMTP_AUTH=true
+MAIL_SMTP_STARTTLS_ENABLE=true
+APP_AUTH_EMAIL_VERIFICATION_FROM=<발신자 이메일>
+APP_AUTH_EMAIL_VERIFICATION_EXPIRE_MINUTES=10
+APP_AUTH_EMAIL_VERIFICATION_MAX_ATTEMPTS=5
+```
+
 소셜 로그인 사용 시 추가:
 
 ```bash
@@ -89,5 +103,6 @@ curl https://<프론트엔드 도메인>/webtoons
 
 - 메인 페이지에서 오늘 요일 인기 웹툰 노출
 - 상단 작은 검색창으로 검색
+- 이메일 회원가입에서 인증번호 발송/확인
 - 카카오/네이버 OAuth 로그인
 - 웹툰 즐겨찾기와 마이페이지

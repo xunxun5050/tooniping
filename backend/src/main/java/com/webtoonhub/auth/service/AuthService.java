@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.webtoonhub.auth.dto.LoginRequest;
 import com.webtoonhub.auth.dto.LoginResponse;
+import com.webtoonhub.auth.dto.SignupRequest;
 import com.webtoonhub.auth.dto.UserProfileDto;
 import com.webtoonhub.common.exception.UnauthorizedException;
 import java.nio.charset.StandardCharsets;
@@ -29,6 +30,9 @@ public class AuthService {
 
     private final ObjectMapper objectMapper;
     private final UserProfileService userProfileService;
+    private final UserAccountService userAccountService;
+    private final RefreshTokenService refreshTokenService;
+    private final EmailVerificationService emailVerificationService;
     private final String configuredUsername;
     private final String configuredPassword;
     private final byte[] secretBytes;
@@ -37,6 +41,9 @@ public class AuthService {
     public AuthService(
         ObjectMapper objectMapper,
         UserProfileService userProfileService,
+        UserAccountService userAccountService,
+        RefreshTokenService refreshTokenService,
+        EmailVerificationService emailVerificationService,
         @Value("${app.auth.username:admin}") String configuredUsername,
         @Value("${app.auth.password:admin1234}") String configuredPassword,
         @Value("${app.auth.secret:webtoon-hub-secret-key-change-this}") String secret,
@@ -44,25 +51,40 @@ public class AuthService {
     ) {
         this.objectMapper = objectMapper;
         this.userProfileService = userProfileService;
+        this.userAccountService = userAccountService;
+        this.refreshTokenService = refreshTokenService;
+        this.emailVerificationService = emailVerificationService;
         this.configuredUsername = configuredUsername;
         this.configuredPassword = configuredPassword;
         this.secretBytes = secret.getBytes(StandardCharsets.UTF_8);
         this.tokenValidSeconds = Math.max(tokenValidMinutes, 1L) * 60L;
     }
 
-    public LoginResponse login(LoginRequest request) {
-        if (!configuredUsername.equals(request.username()) || !configuredPassword.equals(request.password())) {
-            throw new UnauthorizedException("아이디 또는 비밀번호가 올바르지 않습니다.");
+    public AuthResult login(LoginRequest request) {
+        String username = normalizeLoginEmail(request.email());
+        if (configuredUsername.equalsIgnoreCase(username) && configuredPassword.equals(request.password())) {
+            return issueAuthResult(configuredUsername, "LOCAL_ADMIN", configuredUsername, null);
         }
 
-        return issueLoginResponse(configuredUsername, "LOCAL", configuredUsername, null);
+        if (!userAccountService.verifyPassword(username, request.password())) {
+            throw new UnauthorizedException("이메일 또는 비밀번호가 올바르지 않습니다.");
+        }
+
+        return issueAuthResult(username, "LOCAL", username, null);
     }
 
-    public LoginResponse loginWithUsername(String username) {
+    public AuthResult signup(SignupRequest request) {
+        emailVerificationService.requireVerifiedSignupEmail(request.email());
+        UserProfileDto profile = userAccountService.signup(request, configuredUsername);
+        emailVerificationService.consumeSignupEmail(profile.username());
+        return issueAuthResult(profile.username(), "LOCAL", profile.username(), null);
+    }
+
+    public AuthResult loginWithUsername(String username) {
         return loginWithUsername(username, null, null, null);
     }
 
-    public LoginResponse loginWithUsername(
+    public AuthResult loginWithUsername(
         String username,
         String provider,
         String providerUserId,
@@ -71,7 +93,16 @@ public class AuthService {
         if (username == null || username.isBlank()) {
             throw new UnauthorizedException("유효하지 않은 사용자 정보입니다.");
         }
-        return issueLoginResponse(username, provider, providerUserId, sourceNickname);
+        return issueAuthResult(username, provider, providerUserId, sourceNickname);
+    }
+
+    public AuthResult refresh(String refreshToken) {
+        RefreshTokenService.TokenOwner tokenOwner = refreshTokenService.consumeAndRotate(refreshToken);
+        return new AuthResult(issueLoginResponse(tokenOwner.username(), null, null, null), tokenOwner.refreshToken());
+    }
+
+    public void logout(String refreshToken) {
+        refreshTokenService.revoke(refreshToken);
     }
 
     public UserProfileDto getProfile(String username) {
@@ -83,7 +114,23 @@ public class AuthService {
     }
 
     public void deleteAccount(String username) {
+        refreshTokenService.revokeAllForUser(username);
+        userAccountService.deleteAccount(username);
         userProfileService.deleteAccount(username);
+    }
+
+    public boolean isAdmin(String username) {
+        return configuredUsername.equals(username) || userAccountService.isAdmin(username);
+    }
+
+    private AuthResult issueAuthResult(
+        String username,
+        String provider,
+        String providerUserId,
+        String sourceNickname
+    ) {
+        LoginResponse loginResponse = issueLoginResponse(username, provider, providerUserId, sourceNickname);
+        return new AuthResult(loginResponse, refreshTokenService.issue(username));
     }
 
     private LoginResponse issueLoginResponse(
@@ -102,6 +149,8 @@ public class AuthService {
             "Bearer",
             username,
             profile.nickname(),
+            profile.avatarSeed(),
+            profile.avatarPalette(),
             expiresAt.toString(),
             toWeekdayCode(issuedAt)
         );
@@ -202,6 +251,14 @@ public class AuthService {
         return "";
     }
 
+    private String normalizeLoginEmail(String email) {
+        String normalized = email == null ? "" : email.trim().toLowerCase();
+        if (normalized.isEmpty()) {
+            throw new UnauthorizedException("이메일 또는 비밀번호가 올바르지 않습니다.");
+        }
+        return normalized;
+    }
+
     private long toLongValue(Object value) {
         if (value instanceof Number number) {
             return number.longValue();
@@ -227,5 +284,11 @@ public class AuthService {
             case SATURDAY -> "SATURDAY";
             case SUNDAY -> "SUNDAY";
         };
+    }
+
+    public record AuthResult(
+        LoginResponse loginResponse,
+        RefreshTokenService.RefreshToken refreshToken
+    ) {
     }
 }

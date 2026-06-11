@@ -2,6 +2,7 @@ package com.webtoonhub.auth.service;
 
 import com.webtoonhub.auth.dto.UserProfileDto;
 import com.webtoonhub.common.exception.BadRequestException;
+import jakarta.annotation.PostConstruct;
 import java.security.SecureRandom;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -17,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserProfileService {
 
     private static final int MAX_GENERATE_ATTEMPTS = 20;
-    private static final Pattern NICKNAME_PATTERN = Pattern.compile("^[0-9A-Za-z가-힣 ._-]{2,24}$");
+    private static final Pattern NICKNAME_PATTERN = Pattern.compile("^[0-9A-Za-z가-힣 ._-]{2,20}$");
     private static final String[] MOODS = {
         "반짝이는", "말랑한", "용감한", "느긋한", "수상한", "달콤한", "우주맛", "새벽의", "폭풍의", "싱싱한"
     };
@@ -31,12 +32,21 @@ public class UserProfileService {
         "웹툰탐험가", "웹툰수집가", "웹툰항해자", "웹툰연구원", "웹툰감별사",
         "만화방지기", "별빛독자", "쿠키수호자", "장면수집가", "페이지여행자"
     };
+    private static final String[] AVATAR_PALETTES = {
+        "MINT", "SUNNY", "BERRY", "AURORA", "SKY", "LIME", "CORAL", "LILAC"
+    };
 
     private final NamedParameterJdbcTemplate jdbc;
     private final SecureRandom random = new SecureRandom();
 
     public UserProfileService(NamedParameterJdbcTemplate jdbc) {
         this.jdbc = jdbc;
+    }
+
+    @PostConstruct
+    public void ensureAvatarColumns() {
+        addColumnIfMissing("avatar_seed", "avatar_seed VARCHAR(80)");
+        addColumnIfMissing("avatar_palette", "avatar_palette VARCHAR(30)");
     }
 
     public UserProfileDto ensureProfile(
@@ -48,15 +58,20 @@ public class UserProfileService {
         String normalizedUsername = normalizeUsername(username);
         UserProfileDto existing = findProfile(normalizedUsername);
         if (existing != null) {
+            ensureAvatarValues(existing);
             touchProviderInfo(normalizedUsername, provider, providerUserId, sourceNickname);
             return findProfile(normalizedUsername);
         }
 
         String nickname = generateUniqueNickname();
+        String avatarSeed = generateAvatarSeed();
+        String avatarPalette = generateAvatarPalette();
         String sql = """
             INSERT INTO user_profiles (
               username,
               nickname,
+              avatar_seed,
+              avatar_palette,
               provider,
               provider_user_id,
               source_nickname,
@@ -66,6 +81,8 @@ public class UserProfileService {
             VALUES (
               :username,
               :nickname,
+              :avatarSeed,
+              :avatarPalette,
               :provider,
               :providerUserId,
               :sourceNickname,
@@ -78,6 +95,8 @@ public class UserProfileService {
             jdbc.update(sql, new MapSqlParameterSource()
                 .addValue("username", normalizedUsername)
                 .addValue("nickname", nickname)
+                .addValue("avatarSeed", avatarSeed)
+                .addValue("avatarPalette", avatarPalette)
                 .addValue("provider", normalizeNullable(provider))
                 .addValue("providerUserId", normalizeNullable(providerUserId))
                 .addValue("sourceNickname", normalizeNullable(sourceNickname)));
@@ -90,6 +109,53 @@ public class UserProfileService {
 
     public UserProfileDto getOrCreateProfile(String username) {
         return ensureProfile(username, null, null, null);
+    }
+
+    public UserProfileDto createLocalProfile(String username, String nickname) {
+        String normalizedUsername = normalizeUsername(username);
+        String normalizedNickname = normalizeNickname(nickname);
+        if (nicknameExists(normalizedNickname)) {
+            throw new BadRequestException("이미 사용 중인 닉네임입니다.");
+        }
+
+        String avatarSeed = generateAvatarSeed();
+        String avatarPalette = generateAvatarPalette();
+        String sql = """
+            INSERT INTO user_profiles (
+              username,
+              nickname,
+              avatar_seed,
+              avatar_palette,
+              provider,
+              provider_user_id,
+              source_nickname,
+              created_at,
+              updated_at
+            )
+            VALUES (
+              :username,
+              :nickname,
+              :avatarSeed,
+              :avatarPalette,
+              'LOCAL',
+              :username,
+              :nickname,
+              CURRENT_TIMESTAMP,
+              CURRENT_TIMESTAMP
+            )
+            """;
+
+        try {
+            jdbc.update(sql, new MapSqlParameterSource()
+                .addValue("username", normalizedUsername)
+                .addValue("nickname", normalizedNickname)
+                .addValue("avatarSeed", avatarSeed)
+                .addValue("avatarPalette", avatarPalette));
+        } catch (DuplicateKeyException e) {
+            throw new BadRequestException("이미 사용 중인 닉네임입니다.");
+        }
+
+        return findProfile(normalizedUsername);
     }
 
     public UserProfileDto updateNickname(String username, String nickname) {
@@ -155,7 +221,7 @@ public class UserProfileService {
 
     private UserProfileDto findProfile(String username) {
         String sql = """
-            SELECT username, nickname, provider, created_at, updated_at
+            SELECT username, nickname, provider, avatar_seed, avatar_palette, created_at, updated_at
             FROM user_profiles
             WHERE username = :username
             """;
@@ -165,10 +231,32 @@ public class UserProfileService {
                 rs.getString("username"),
                 rs.getString("nickname"),
                 rs.getString("provider"),
+                rs.getString("avatar_seed"),
+                rs.getString("avatar_palette"),
                 toLocalDateTime(rs.getTimestamp("created_at")),
                 toLocalDateTime(rs.getTimestamp("updated_at"))
             ));
         return profiles.isEmpty() ? null : profiles.get(0);
+    }
+
+    private void ensureAvatarValues(UserProfileDto profile) {
+        boolean needsSeed = profile.avatarSeed() == null || profile.avatarSeed().isBlank();
+        boolean needsPalette = profile.avatarPalette() == null || profile.avatarPalette().isBlank();
+        if (!needsSeed && !needsPalette) {
+            return;
+        }
+
+        String sql = """
+            UPDATE user_profiles
+            SET avatar_seed = :avatarSeed,
+                avatar_palette = :avatarPalette,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE username = :username
+            """;
+        jdbc.update(sql, new MapSqlParameterSource()
+            .addValue("username", profile.username())
+            .addValue("avatarSeed", needsSeed ? generateAvatarSeed() : profile.avatarSeed())
+            .addValue("avatarPalette", needsPalette ? generateAvatarPalette() : profile.avatarPalette()));
     }
 
     private String generateUniqueNickname() {
@@ -186,6 +274,28 @@ public class UserProfileService {
             }
         }
         throw new BadRequestException("사용 가능한 자동 닉네임을 만들지 못했습니다.");
+    }
+
+    private String generateAvatarSeed() {
+        return "avatar-" + Long.toUnsignedString(random.nextLong(), 36);
+    }
+
+    private String generateAvatarPalette() {
+        return AVATAR_PALETTES[random.nextInt(AVATAR_PALETTES.length)];
+    }
+
+    private void addColumnIfMissing(String columnName, String columnDefinition) {
+        String sql = """
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE LOWER(TABLE_NAME) = 'user_profiles'
+              AND LOWER(COLUMN_NAME) = :columnName
+            """;
+        Long count = jdbc.queryForObject(sql, new MapSqlParameterSource("columnName", columnName), Long.class);
+        if (count != null && count > 0) {
+            return;
+        }
+        jdbc.getJdbcTemplate().execute("ALTER TABLE user_profiles ADD COLUMN " + columnDefinition);
     }
 
     private boolean nicknameExists(String nickname) {

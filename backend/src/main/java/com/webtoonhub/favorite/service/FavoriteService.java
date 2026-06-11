@@ -3,6 +3,7 @@ package com.webtoonhub.favorite.service;
 import com.webtoonhub.common.exception.NotFoundException;
 import com.webtoonhub.favorite.dto.FavoriteWebtoonDto;
 import com.webtoonhub.webtoon.dto.CodeNameDto;
+import com.webtoonhub.webtoon.dto.PlatformDto;
 import java.sql.Timestamp;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -37,10 +38,14 @@ public class FavoriteService {
               COALESCE(w.author, '작가 미상') AS author,
               w.status,
               w.original_url,
+              p.code AS platform_code,
+              p.name AS platform_name,
+              p.base_url AS platform_base_url,
               COALESCE(img.stored_path, img.source_url) AS thumbnail_url,
               f.created_at AS added_at
             FROM user_favorite_webtoons f
             JOIN webtoons w ON w.id = f.webtoon_id
+            JOIN platforms p ON p.id = w.platform_id
             LEFT JOIN webtoon_images img
               ON img.webtoon_id = w.id
              AND img.is_primary = TRUE
@@ -93,10 +98,14 @@ public class FavoriteService {
               COALESCE(w.author, '작가 미상') AS author,
               w.status,
               w.original_url,
+              p.code AS platform_code,
+              p.name AS platform_name,
+              p.base_url AS platform_base_url,
               COALESCE(img.stored_path, img.source_url) AS thumbnail_url,
               f.created_at AS added_at
             FROM user_favorite_webtoons f
             JOIN webtoons w ON w.id = f.webtoon_id
+            JOIN platforms p ON p.id = w.platform_id
             LEFT JOIN webtoon_images img
               ON img.webtoon_id = w.id
              AND img.is_primary = TRUE
@@ -125,6 +134,7 @@ public class FavoriteService {
                 row.title(),
                 row.author(),
                 row.thumbnailUrl(),
+                new PlatformDto(row.platformCode(), row.platformName(), row.platformBaseUrl()),
                 row.status(),
                 toStatusName(row.status()),
                 row.originalUrl(),
@@ -194,6 +204,9 @@ public class FavoriteService {
                 rs.getString("author"),
                 rs.getString("status"),
                 rs.getString("original_url"),
+                rs.getString("platform_code"),
+                rs.getString("platform_name"),
+                rs.getString("platform_base_url"),
                 rs.getString("thumbnail_url"),
                 addedAt == null ? null : addedAt.toInstant().toString()
             );
@@ -213,6 +226,9 @@ public class FavoriteService {
         String author,
         String status,
         String originalUrl,
+        String platformCode,
+        String platformName,
+        String platformBaseUrl,
         String thumbnailUrl,
         String addedAt
     ) {

@@ -13,6 +13,8 @@ function AuthCallbackContent() {
     const tokenType = searchParams.get("tokenType");
     const username = searchParams.get("username");
     const nickname = searchParams.get("nickname") || username || "";
+    const avatarSeed = searchParams.get("avatarSeed") || `avatar-${username}`;
+    const avatarPalette = searchParams.get("avatarPalette") || "MINT";
     const expiresAt = searchParams.get("expiresAt");
     const loginWeekday = searchParams.get("loginWeekday") || "MONDAY";
     const nextPathRaw = searchParams.get("next") || "/webtoons";
@@ -28,6 +30,8 @@ function AuthCallbackContent() {
       tokenType,
       username,
       nickname,
+      avatarSeed,
+      avatarPalette,
       expiresAt,
       loginWeekday
     });

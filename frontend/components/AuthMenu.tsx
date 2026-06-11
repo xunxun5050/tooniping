@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ProfileAvatar } from "@/components/ProfileAvatar";
 import {
   AUTH_SESSION_CHANGED_EVENT,
   AuthSession,
   clearAuthSession,
+  getAuthSession,
+  logoutAuthSession,
   readAuthSession
 } from "@/lib/auth-client";
 import {
@@ -32,15 +35,23 @@ export function AuthMenu() {
   const [favoriteWebtoons, setFavoriteWebtoons] = useState<FavoriteWebtoon[]>([]);
 
   useEffect(() => {
+    let active = true;
+
     function syncSession() {
       setSession(readAuthSession());
     }
 
     syncSession();
+    getAuthSession().then((nextSession) => {
+      if (active) {
+        setSession(nextSession);
+      }
+    });
     window.addEventListener("storage", syncSession);
     window.addEventListener(AUTH_SESSION_CHANGED_EVENT, syncSession as EventListener);
 
     return () => {
+      active = false;
       window.removeEventListener("storage", syncSession);
       window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, syncSession as EventListener);
     };
@@ -97,8 +108,8 @@ export function AuthMenu() {
     };
   }, [session]);
 
-  function logout() {
-    clearAuthSession();
+  async function logout() {
+    await logoutAuthSession();
     clearFavoriteWebtoons();
     setSession(null);
     setFavoriteWebtoons([]);
@@ -116,12 +127,11 @@ export function AuthMenu() {
   }
 
   const displayName = session.nickname || session.username;
-  const initial = displayName.slice(0, 1);
 
   return (
     <div className="auth-nav">
       <Link className="auth-user-button" href="/favorites" aria-label="연재중 즐겨찾기 요일별 보기">
-        <span className="auth-user-avatar">{initial}</span>
+        <ProfileAvatar seed={session.avatarSeed} palette={session.avatarPalette} label={displayName} size="sm" />
         <span className="auth-user-copy">
           <span className="auth-user-label">내 서재</span>
           <span className="auth-user-name">{displayName}</span>

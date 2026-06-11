@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { PlatformRatioOrb } from "@/components/PlatformRatioOrb";
+import { ProfileAvatar } from "@/components/ProfileAvatar";
 import {
   AUTH_SESSION_CHANGED_EVENT,
   AuthSession,
   clearAuthSession,
+  getAuthSession,
+  logoutAuthSession,
   readAuthSession,
   saveAuthSession
 } from "@/lib/auth-client";
@@ -25,14 +29,6 @@ import {
 import { ApiResponse, AuthMeResponse, FavoriteWebtoon, WebtoonEvaluation } from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-
-type UserProfile = {
-  username: string;
-  nickname: string;
-  provider: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
 
 const MY_ACTIVITY_ITEMS = [
   {
@@ -70,20 +66,25 @@ export default function MyPage() {
   const [favoriteWebtoons, setFavoriteWebtoons] = useState<FavoriteWebtoon[]>([]);
   const [evaluations, setEvaluations] = useState<WebtoonEvaluation[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [nicknameInput, setNicknameInput] = useState("");
-  const [nicknameMessage, setNicknameMessage] = useState<string | null>(null);
-  const [savingNickname, setSavingNickname] = useState(false);
 
   useEffect(() => {
+    let active = true;
+
     function syncSession() {
       setSession(readAuthSession());
     }
 
     syncSession();
+    getAuthSession().then((nextSession) => {
+      if (active) {
+        setSession(nextSession);
+      }
+    });
     window.addEventListener("storage", syncSession);
     window.addEventListener(AUTH_SESSION_CHANGED_EVENT, syncSession as EventListener);
 
     return () => {
+      active = false;
       window.removeEventListener("storage", syncSession);
       window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, syncSession as EventListener);
     };
@@ -185,7 +186,6 @@ export default function MyPage() {
 
   useEffect(() => {
     if (!session) {
-      setNicknameInput("");
       return;
     }
 
@@ -212,7 +212,20 @@ export default function MyPage() {
         }
 
         if (active) {
-          setNicknameInput(meJson.data.nickname);
+          if (
+            meJson.data.avatarSeed !== currentSession.avatarSeed ||
+            meJson.data.avatarPalette !== currentSession.avatarPalette ||
+            meJson.data.nickname !== currentSession.nickname
+          ) {
+            const nextSession = {
+              ...currentSession,
+              nickname: meJson.data.nickname,
+              avatarSeed: meJson.data.avatarSeed,
+              avatarPalette: meJson.data.avatarPalette
+            };
+            saveAuthSession(nextSession);
+            setSession(nextSession);
+          }
         }
       } catch {
         if (active) {
@@ -228,54 +241,6 @@ export default function MyPage() {
     };
   }, [session]);
 
-  async function handleNicknameSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!session || savingNickname) {
-      return;
-    }
-
-    setSavingNickname(true);
-    setNicknameMessage(null);
-    setError(null);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/me/nickname`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `${session.tokenType} ${session.token}`
-        },
-        body: JSON.stringify({ nickname: nicknameInput })
-      });
-      const json = (await response.json()) as ApiResponse<UserProfile>;
-
-      if (!response.ok || !json.success || !json.data) {
-        if (response.status === 401) {
-          clearAuthSession();
-          clearFavoriteWebtoons();
-          setSession(null);
-          setError("로그인이 만료되었습니다. 다시 로그인해 주세요.");
-          return;
-        }
-        setError(json.message ?? "닉네임을 저장하지 못했습니다.");
-        return;
-      }
-
-      const nextSession = {
-        ...session,
-        nickname: json.data.nickname
-      };
-      saveAuthSession(nextSession);
-      setSession(nextSession);
-      setNicknameInput(json.data.nickname);
-      setNicknameMessage("닉네임을 저장했습니다.");
-    } catch {
-      setError("닉네임 저장 중 오류가 발생했습니다.");
-    } finally {
-      setSavingNickname(false);
-    }
-  }
-
   if (!session) {
     return (
       <section className="quick-nav reveal">
@@ -290,52 +255,29 @@ export default function MyPage() {
 
   return (
     <section className="mypage">
-      <div className="mypage-header quick-nav reveal">
-        <h1>마이페이지</h1>
-        <p className="description">내 활동과 즐겨찾기 작품을 한곳에서 관리하세요.</p>
-        <div className="mypage-actions">
-          <Link className="more-link" href="/webtoons">
-            웹툰 목록으로 이동
-          </Link>
-          <button
-            className="auth-link-button"
-            type="button"
-            onClick={() => {
-              clearAuthSession();
-            }}
-          >
-            로그아웃
-          </button>
-        </div>
-      </div>
+
 
       {error ? <p className="auth-error">{error}</p> : null}
 
       <div className="mypage-grid">
         <section className="mypage-card reveal">
-          <h2>프로필 관리</h2>
-          <form className="nickname-form" onSubmit={handleNicknameSubmit}>
-            <label htmlFor="nickname">닉네임</label>
-            <div className="nickname-row">
-              <input
-                id="nickname"
-                type="text"
-                value={nicknameInput}
-                onChange={(event) => {
-                  setNicknameInput(event.target.value);
-                  setNicknameMessage(null);
-                }}
-                minLength={2}
-                maxLength={24}
-                autoComplete="nickname"
-              />
-              <button type="submit" disabled={savingNickname}>
-                {savingNickname ? "저장 중..." : "저장"}
-              </button>
+          <div className="profile-management-layout">
+            <div className="profile-editor">
+              <div className="profile-avatar-row">
+                <ProfileAvatar
+                  seed={session.avatarSeed}
+                  palette={session.avatarPalette}
+                  label={session.nickname || session.username}
+                  size="lg"
+                />
+                <div className="profile-identity">
+                  <span>닉네임</span>
+                  <strong>{session.nickname || session.username}</strong>
+                </div>
+              </div>
             </div>
-            <p className="description">처음 가입하면 단어 조합 닉네임이 자동으로 만들어져요.</p>
-            {nicknameMessage ? <p className="nickname-message">{nicknameMessage}</p> : null}
-          </form>
+            <PlatformRatioOrb favorites={favoriteWebtoons} />
+          </div>
         </section>
 
         <section className="mypage-card reveal">
@@ -437,11 +379,10 @@ export default function MyPage() {
           <h2>계정 관리</h2>
           <div className="withdrawal-entry">
             <div>
-              <strong>회원 탈퇴</strong>
-              <p className="description">프로필, 즐겨찾기, 웹툰 평가는 별도 확인 페이지에서 삭제합니다.</p>
+
             </div>
             <Link className="withdrawal-link" href="/mypage/withdrawal">
-              탈퇴 페이지로 이동
+              회원 탈퇴
             </Link>
           </div>
         </section>

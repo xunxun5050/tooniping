@@ -76,13 +76,23 @@ export type AuthLoginResponse = {
   tokenType: string;
   username: string;
   nickname: string;
+  avatarSeed: string;
+  avatarPalette: string;
   expiresAt: string;
   loginWeekday: string;
+};
+
+export type EmailVerificationResponse = {
+  email: string;
+  expiresAt: string;
+  verified: boolean;
 };
 
 export type AuthMeResponse = {
   username: string;
   nickname: string;
+  avatarSeed: string;
+  avatarPalette: string;
 };
 
 export type FavoriteWebtoon = {
@@ -90,6 +100,7 @@ export type FavoriteWebtoon = {
   title: string;
   author: string;
   thumbnailUrl: string | null;
+  platform?: Platform;
   status?: string;
   statusName: string;
   originalUrl: string;

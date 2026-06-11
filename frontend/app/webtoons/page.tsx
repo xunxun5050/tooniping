@@ -102,6 +102,17 @@ function buildQuery(searchParams: SearchParams, updates: Record<string, string>)
   return query ? `/webtoons?${query}` : "/webtoons";
 }
 
+function buildWeekdayFilterHref(searchParams: SearchParams, code: string) {
+  return buildQuery(searchParams, { weekday: code, status: "", page: "" });
+}
+
+function buildStatusFilterHref(searchParams: SearchParams, code: string) {
+  const updates: Record<string, string> = code === "COMPLETED"
+    ? { status: code, weekday: "", page: "" }
+    : { status: code, page: "" };
+  return buildQuery(searchParams, updates);
+}
+
 export default async function WebtoonsPage({ searchParams }: Props) {
   const resolvedSearchParams = await searchParams;
   const keyword = pick(resolvedSearchParams, "keyword");
@@ -220,7 +231,7 @@ export default async function WebtoonsPage({ searchParams }: Props) {
             options={weekdayOptions}
             selectedCode={effectiveWeekday}
             showAll={false}
-            makeHref={(code) => buildQuery(resolvedSearchParams, { weekday: code, page: "" })}
+            makeHref={(code) => buildWeekdayFilterHref(resolvedSearchParams, code)}
             clearHref={buildQuery(resolvedSearchParams, { weekday: "ALL", page: "" })}
           />
           <FilterGroup
@@ -234,7 +245,7 @@ export default async function WebtoonsPage({ searchParams }: Props) {
             title="연재 상태"
             options={filters.statuses}
             selectedCode={status}
-            makeHref={(code) => buildQuery(resolvedSearchParams, { status: code, page: "" })}
+            makeHref={(code) => buildStatusFilterHref(resolvedSearchParams, code)}
             clearHref={buildQuery(resolvedSearchParams, { status: "", page: "" })}
           />
         </aside>

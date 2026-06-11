@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
-import { AUTH_SESSION_CHANGED_EVENT, AuthSession, clearAuthSession, readAuthSession } from "@/lib/auth-client";
+import { AUTH_SESSION_CHANGED_EVENT, AuthSession, clearAuthSession, getAuthSession, readAuthSession } from "@/lib/auth-client";
 import {
   EvaluationApiError,
   WEBTOON_EMOTION_TAG_META,
@@ -33,15 +33,23 @@ export function WebtoonEvaluationForm({ webtoon }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
+
     function syncSession() {
       setSession(readAuthSession());
     }
 
     syncSession();
+    getAuthSession().then((nextSession) => {
+      if (active) {
+        setSession(nextSession);
+      }
+    });
     window.addEventListener("storage", syncSession);
     window.addEventListener(AUTH_SESSION_CHANGED_EVENT, syncSession as EventListener);
 
     return () => {
+      active = false;
       window.removeEventListener("storage", syncSession);
       window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, syncSession as EventListener);
     };
@@ -111,10 +119,12 @@ export function WebtoonEvaluationForm({ webtoon }: Props) {
     if (isSaving) {
       return;
     }
-    if (!session) {
+    const activeSession = session ?? await getAuthSession();
+    if (!activeSession) {
       router.push(buildLoginHref());
       return;
     }
+    setSession(activeSession);
     if (!rating) {
       setError("레이팅을 선택해 주세요.");
       return;
@@ -128,7 +138,7 @@ export function WebtoonEvaluationForm({ webtoon }: Props) {
     setError(null);
     setMessage(null);
     try {
-      const saved = await saveWebtoonEvaluation(session, webtoon.id, rating, emotionTags);
+      const saved = await saveWebtoonEvaluation(activeSession, webtoon.id, rating, emotionTags);
       setEvaluation(saved);
       setRating(saved.rating);
       setEmotionTags(saved.emotionTags);

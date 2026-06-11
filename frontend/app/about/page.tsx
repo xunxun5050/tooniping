@@ -70,6 +70,20 @@ export default function AboutPage() {
 
       <section className="about-band about-source-band">
         <div>
+          <p className="about-kicker">광고와 개인정보</p>
+          <h2>광고 도입 전에도 투명하게 안내합니다</h2>
+        </div>
+        <p>
+          추후 광고 또는 분석 도구를 도입하는 경우 수집 항목, 이용 목적, 보유 기간, 거부 방법을
+          개인정보 처리방침에 먼저 정리하고 광고성 콘텐츠는 일반 웹툰 정렬과 구분해 표시합니다.{" "}
+          <Link className="inline-link" href="/privacy">
+            개인정보 처리방침 보기
+          </Link>
+        </p>
+      </section>
+
+      <section className="about-band about-source-band">
+        <div>
           <p className="about-kicker">출처</p>
           <h2>네이버 웹툰 · 카카오 웹툰</h2>
         </div>

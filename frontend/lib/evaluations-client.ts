@@ -1,6 +1,6 @@
 "use client";
 
-import { AuthSession } from "@/lib/auth-client";
+import { AuthSession, refreshAuthSession } from "@/lib/auth-client";
 import { ApiResponse, WebtoonEvaluation, WebtoonRating } from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
@@ -43,7 +43,7 @@ function toAuthHeader(session: AuthSession): string {
   return `${session.tokenType} ${session.token}`;
 }
 
-async function requestEvaluationApi<T>(session: AuthSession, path: string, init?: RequestInit): Promise<T> {
+async function fetchEvaluationApi<T>(session: AuthSession, path: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
   headers.set("Authorization", toAuthHeader(session));
 
@@ -57,6 +57,18 @@ async function requestEvaluationApi<T>(session: AuthSession, path: string, init?
     payload = (await response.json()) as ApiResponse<T>;
   } catch {
     payload = null;
+  }
+
+  return { response, payload };
+}
+
+async function requestEvaluationApi<T>(session: AuthSession, path: string, init?: RequestInit): Promise<T> {
+  let { response, payload } = await fetchEvaluationApi<T>(session, path, init);
+  if (response.status === 401) {
+    const refreshedSession = await refreshAuthSession();
+    if (refreshedSession) {
+      ({ response, payload } = await fetchEvaluationApi<T>(refreshedSession, path, init));
+    }
   }
 
   if (!response.ok || !payload?.success) {

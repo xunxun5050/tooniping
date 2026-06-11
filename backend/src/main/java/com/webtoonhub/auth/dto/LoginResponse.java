@@ -5,6 +5,8 @@ public record LoginResponse(
     String tokenType,
     String username,
     String nickname,
+    String avatarSeed,
+    String avatarPalette,
     String expiresAt,
     String loginWeekday
 ) {

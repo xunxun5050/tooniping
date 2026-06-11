@@ -36,6 +36,8 @@
 
 ### 회원 기능
 
+- 이메일 회원가입과 JWT 로그인
+- 회원가입 시 6자리 이메일 인증번호 발송/확인
 - 기본 관리자 로그인
 - 카카오 OAuth 로그인
 - 네이버 OAuth 로그인
@@ -231,6 +233,15 @@ cp backend/oauth.env.example backend/oauth.env
 | `APP_AUTH_PASSWORD` | 기본 관리자 비밀번호 | `admin1234` |
 | `APP_AUTH_SECRET` | JWT 서명용 secret | 충분히 긴 임의 문자열 |
 | `APP_AUTH_TOKEN_VALID_MINUTES` | 토큰 유효 시간 | `480` |
+| `MAIL_HOST` | 이메일 인증번호 발송용 SMTP host | SMTP 제공자 값 |
+| `MAIL_PORT` | SMTP port | `587` |
+| `MAIL_USERNAME` | SMTP 계정 | SMTP 제공자 값 |
+| `MAIL_PASSWORD` | SMTP 비밀번호 또는 앱 비밀번호 | SMTP 제공자 값 |
+| `MAIL_SMTP_AUTH` | SMTP 인증 사용 여부 | `true` |
+| `MAIL_SMTP_STARTTLS_ENABLE` | STARTTLS 사용 여부 | `true` |
+| `APP_AUTH_EMAIL_VERIFICATION_FROM` | 인증 메일 발신자 | `no-reply@tooniping.app` |
+| `APP_AUTH_EMAIL_VERIFICATION_EXPIRE_MINUTES` | 인증번호 유효 시간 | `10` |
+| `APP_AUTH_EMAIL_VERIFICATION_MAX_ATTEMPTS` | 인증번호 확인 최대 시도 횟수 | `5` |
 | `APP_AUTH_OAUTH_FRONTEND_BASE_URL` | OAuth 완료 후 돌아갈 프론트 주소 | `http://localhost:3000` |
 | `APP_AUTH_OAUTH_KAKAO_CLIENT_ID` | 카카오 REST API 키 | 카카오 개발자 콘솔 값 |
 | `APP_AUTH_OAUTH_KAKAO_CLIENT_SECRET` | 카카오 client secret | 카카오 개발자 콘솔 값 |
@@ -261,7 +272,7 @@ NEXT_PUBLIC_API_BASE_URL=https://backend-production-9cc0.up.railway.app
 ```bash
 TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"admin1234"}' | jq -r '.data.token')
+  -d '{"email":"admin","password":"admin1234"}' | jq -r '.data.token')
 ```
 
 네이버 웹툰 초기 적재:
@@ -356,7 +367,12 @@ curl "http://localhost:8080/api/webtoons?sort=popular&weekday=MONDAY&page=0&size
 
 | Method | Path | 설명 |
 | --- | --- | --- |
-| `POST` | `/api/auth/login` | 기본 계정 로그인 |
+| `POST` | `/api/auth/signup/email-code` | 이메일 회원가입 인증번호 발송 |
+| `POST` | `/api/auth/signup/email-code/verify` | 이메일 회원가입 인증번호 확인 |
+| `POST` | `/api/auth/signup` | 이메일 회원가입 |
+| `POST` | `/api/auth/login` | 이메일/기본 관리자 로그인 |
+| `POST` | `/api/auth/refresh` | 로그인 유지 토큰 갱신 |
+| `POST` | `/api/auth/logout` | 로그아웃 |
 | `GET` | `/api/auth/me` | 내 프로필 |
 | `PATCH` | `/api/auth/me/nickname` | 닉네임 수정 |
 | `DELETE` | `/api/auth/me` | 회원 탈퇴 |
@@ -368,7 +384,7 @@ curl "http://localhost:8080/api/webtoons?sort=popular&weekday=MONDAY&page=0&size
 ```bash
 curl -X POST http://localhost:8080/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"admin1234"}'
+  -d '{"email":"admin","password":"admin1234"}'
 ```
 
 ### Favorites
@@ -413,8 +429,12 @@ curl -X POST http://localhost:8080/api/auth/login \
 | `weekdays` | 요일 코드 |
 | `webtoon_weekdays` | 웹툰-요일 매핑 |
 | `webtoon_popularity_rankings` | 인기순 랭킹 |
+| `user_accounts` | 이메일 회원 계정과 비밀번호 해시 |
 | `user_profiles` | 사용자 프로필과 닉네임 |
+| `user_refresh_tokens` | 로그인 유지용 refresh token |
+| `email_verification_codes` | 이메일 회원가입 인증번호 해시와 만료 정보 |
 | `user_favorite_webtoons` | 사용자 즐겨찾기 |
+| `webtoon_evaluations` | 사용자 웹툰 평가와 감정 태그 |
 | `crawl_histories` | 크롤링 실행 이력 |
 | `crawl_failures` | 크롤링 실패 상세 |
 
@@ -444,6 +464,13 @@ SPRING_DATASOURCE_PASSWORD=<MYSQLPASSWORD>
 APP_AUTH_SECRET=<충분히 긴 랜덤 문자열>
 APP_AUTH_TOKEN_VALID_MINUTES=480
 APP_AUTH_OAUTH_FRONTEND_BASE_URL=https://tooniping.vercel.app
+MAIL_HOST=<SMTP 서버 호스트>
+MAIL_PORT=587
+MAIL_USERNAME=<SMTP 계정>
+MAIL_PASSWORD=<SMTP 비밀번호 또는 앱 비밀번호>
+MAIL_SMTP_AUTH=true
+MAIL_SMTP_STARTTLS_ENABLE=true
+APP_AUTH_EMAIL_VERIFICATION_FROM=<발신자 이메일>
 ```
 
 OAuth 사용 시 카카오/네이버 client id, secret, redirect URI도 Railway에 설정해야 합니다.

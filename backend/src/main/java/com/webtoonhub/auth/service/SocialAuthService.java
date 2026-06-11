@@ -84,14 +84,14 @@ public class SocialAuthService {
         return KAKAO_AUTHORIZE_URL + "?" + toQueryString(params);
     }
 
-    public String handleCallback(String providerText, String code, String state, String error, String errorDescription) {
+    public OAuthCallbackResult handleCallback(String providerText, String code, String state, String error, String errorDescription) {
         OAuthProvider provider = OAuthProvider.from(providerText);
         if (hasText(error)) {
             String message = hasText(errorDescription) ? errorDescription : provider.displayName() + " 로그인에 실패했습니다.";
-            return buildLoginErrorRedirect(message, "/mypage");
+            return new OAuthCallbackResult(buildLoginErrorRedirect(message, "/mypage"), null);
         }
         if (!hasText(code) || !hasText(state)) {
-            return buildLoginErrorRedirect("소셜 로그인 인증 정보가 누락되었습니다.", "/mypage");
+            return new OAuthCallbackResult(buildLoginErrorRedirect("소셜 로그인 인증 정보가 누락되었습니다.", "/mypage"), null);
         }
 
         ProviderConfig config = getProviderConfig(provider);
@@ -102,25 +102,34 @@ public class SocialAuthService {
             String accessToken = requestAccessToken(provider, config, code, state);
             SocialUserProfile profile = requestSocialProfile(provider, accessToken);
             String username = generateUsername(provider, profile.providerUserId());
-            LoginResponse loginResponse = authService.loginWithUsername(
+            AuthService.AuthResult authResult = authService.loginWithUsername(
                 username,
                 provider.code().toUpperCase(),
                 profile.providerUserId(),
                 profile.nickname()
             );
+            LoginResponse loginResponse = authResult.loginResponse();
 
             Map<String, String> successParams = new LinkedHashMap<>();
             successParams.put("token", loginResponse.token());
             successParams.put("tokenType", loginResponse.tokenType());
             successParams.put("username", loginResponse.username());
             successParams.put("nickname", loginResponse.nickname());
+            successParams.put("avatarSeed", loginResponse.avatarSeed());
+            successParams.put("avatarPalette", loginResponse.avatarPalette());
             successParams.put("expiresAt", loginResponse.expiresAt());
             successParams.put("loginWeekday", loginResponse.loginWeekday());
             successParams.put("next", oauthState.nextPath());
 
-            return frontendBaseUrl + "/auth/callback?" + toQueryString(successParams);
+            return new OAuthCallbackResult(
+                frontendBaseUrl + "/auth/callback?" + toQueryString(successParams),
+                authResult.refreshToken()
+            );
         } catch (Exception e) {
-            return buildLoginErrorRedirect(provider.displayName() + " 로그인 처리 중 오류가 발생했습니다.", oauthState.nextPath());
+            return new OAuthCallbackResult(
+                buildLoginErrorRedirect(provider.displayName() + " 로그인 처리 중 오류가 발생했습니다.", oauthState.nextPath()),
+                null
+            );
         }
     }
 
@@ -402,6 +411,9 @@ public class SocialAuthService {
     }
 
     private record SocialUserProfile(String providerUserId, String nickname) {
+    }
+
+    public record OAuthCallbackResult(String redirectUrl, RefreshTokenService.RefreshToken refreshToken) {
     }
 
     private record OAuthState(String nextPath) {

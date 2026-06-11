@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
-import { saveAuthSession, readAuthSession } from "@/lib/auth-client";
+import { getAuthSession, saveAuthSession } from "@/lib/auth-client";
 import { ApiResponse, AuthLoginResponse } from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
@@ -11,7 +11,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,14 +21,23 @@ function LoginPageContent() {
     return raw.startsWith("/") ? raw : "/webtoons";
   }, [searchParams]);
   const oauthErrorMessage = searchParams.get("oauthError");
-  const kakaoSignupUrl = `${API_BASE_URL}/api/auth/oauth/kakao/start?next=${encodeURIComponent(nextPath)}`;
-  const naverSignupUrl = `${API_BASE_URL}/api/auth/oauth/naver/start?next=${encodeURIComponent(nextPath)}`;
+  const kakaoLoginUrl = `${API_BASE_URL}/api/auth/oauth/kakao/start?next=${encodeURIComponent(nextPath)}`;
 
   useEffect(() => {
-    const session = readAuthSession();
-    if (session) {
-      router.replace(nextPath);
+    let active = true;
+
+    async function redirectIfLoggedIn() {
+      const session = await getAuthSession();
+      if (active && session) {
+        router.replace(nextPath);
+      }
     }
+
+    redirectIfLoggedIn();
+
+    return () => {
+      active = false;
+    };
   }, [nextPath, router]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -42,8 +51,9 @@ function LoginPageContent() {
         headers: {
           "Content-Type": "application/json"
         },
+        credentials: "include",
         body: JSON.stringify({
-          username,
+          email,
           password
         })
       });
@@ -68,17 +78,18 @@ function LoginPageContent() {
     <section className="auth-page">
       <div className="auth-card reveal">
         <h1>로그인</h1>
-        <p className="auth-subtitle">관리자 API를 사용하려면 로그인해 주세요.</p>
         {oauthErrorMessage ? <p className="auth-error">{oauthErrorMessage}</p> : null}
 
         <form className="auth-form" onSubmit={handleSubmit}>
-          <label htmlFor="username">아이디</label>
+          <label htmlFor="email">이메일</label>
           <input
-            id="username"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            placeholder="admin"
-            autoComplete="username"
+            id="email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="you@example.com"
+            autoComplete="email"
+            maxLength={100}
             required
           />
 
@@ -101,19 +112,24 @@ function LoginPageContent() {
         </form>
 
         <div className="auth-signup">
-          <p>처음이신가요? 소셜 계정으로 회원가입/로그인</p>
-          <a className="social-signup kakao" href={kakaoSignupUrl}>
-            카카오로 시작하기
-          </a>
-          <a className="social-signup naver" href={naverSignupUrl}>
-            네이버로 시작하기
-          </a>
+          <p>처음이신가요?</p>
+          <Link className="auth-secondary-link" href={`/signup?next=${encodeURIComponent(nextPath)}`}>
+            회원가입
+          </Link>
+        </div>
+
+        <div className="auth-social-section" aria-label="간편 로그인">
+          <div className="auth-divider">
+            <span>간편 로그인</span>
+          </div>
+          <div className="auth-social-grid">
+            <a className="auth-social-button kakao" href={kakaoLoginUrl} aria-label="카카오로 로그인">
+              <span className="kakao-bubble" aria-hidden="true" />
+            </a>
+          </div>
         </div>
 
         <div className="auth-help">
-          <p>
-            기본 계정: <code>admin</code> / <code>admin1234</code>
-          </p>
           <Link href="/">메인으로 돌아가기</Link>
         </div>
       </div>

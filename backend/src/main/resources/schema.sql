@@ -89,11 +89,44 @@ CREATE TABLE IF NOT EXISTS webtoon_popularity_rankings (
 CREATE TABLE IF NOT EXISTS user_profiles (
     username VARCHAR(100) PRIMARY KEY,
     nickname VARCHAR(40) NOT NULL UNIQUE,
+    avatar_seed VARCHAR(80) NOT NULL,
+    avatar_palette VARCHAR(30) NOT NULL,
     provider VARCHAR(30),
     provider_user_id VARCHAR(100),
     source_nickname VARCHAR(100),
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS user_accounts (
+    username VARCHAR(100) PRIMARY KEY,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(30) NOT NULL DEFAULT 'USER',
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS user_refresh_tokens (
+    token_hash VARCHAR(128) PRIMARY KEY,
+    username VARCHAR(100) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL,
+    last_used_at DATETIME,
+    INDEX idx_user_refresh_tokens_username (username),
+    INDEX idx_user_refresh_tokens_expires_at (expires_at)
+);
+
+CREATE TABLE IF NOT EXISTS email_verification_codes (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(100) NOT NULL,
+    purpose VARCHAR(30) NOT NULL,
+    code_hash VARCHAR(128) NOT NULL,
+    attempt_count INT NOT NULL DEFAULT 0,
+    expires_at DATETIME NOT NULL,
+    verified_at DATETIME,
+    created_at DATETIME NOT NULL,
+    INDEX idx_email_verification_lookup (email, purpose, expires_at),
+    INDEX idx_email_verification_verified (email, purpose, verified_at)
 );
 
 CREATE TABLE IF NOT EXISTS webtoon_images (

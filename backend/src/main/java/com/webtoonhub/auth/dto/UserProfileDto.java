@@ -6,6 +6,8 @@ public record UserProfileDto(
     String username,
     String nickname,
     String provider,
+    String avatarSeed,
+    String avatarPalette,
     LocalDateTime createdAt,
     LocalDateTime updatedAt
 ) {

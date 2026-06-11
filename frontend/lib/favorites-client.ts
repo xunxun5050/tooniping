@@ -1,7 +1,7 @@
 "use client";
 
-import { AuthSession } from "@/lib/auth-client";
-import { ApiResponse, CodeName, FavoriteWebtoon, WebtoonCard } from "@/lib/types";
+import { AuthSession, refreshAuthSession } from "@/lib/auth-client";
+import { ApiResponse, CodeName, FavoriteWebtoon, Platform, WebtoonCard } from "@/lib/types";
 
 const FAVORITES_STORAGE_KEY = "webtoon_hub_favorite_webtoons";
 export const FAVORITES_CHANGED_EVENT = "favorite-webtoons-changed";
@@ -51,9 +51,18 @@ function isCodeName(value: unknown): value is CodeName {
   return typeof item.code === "string" && typeof item.name === "string";
 }
 
+function isPlatform(value: unknown): value is Platform {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const item = value as Partial<Platform>;
+  return typeof item.code === "string" && typeof item.name === "string";
+}
+
 function normalizeFavoriteWebtoon(item: FavoriteWebtoon): FavoriteWebtoon {
   return {
     ...item,
+    platform: isPlatform(item.platform) ? item.platform : undefined,
     genres: Array.isArray(item.genres) ? item.genres.filter(isCodeName) : [],
     weekdays: Array.isArray(item.weekdays) ? item.weekdays.filter(isCodeName) : []
   };
@@ -119,6 +128,7 @@ function toFavoriteWebtoon(webtoon: WebtoonCard): FavoriteWebtoon {
     title: webtoon.title,
     author: webtoon.author || "작가 미상",
     thumbnailUrl: webtoon.thumbnailUrl,
+    platform: webtoon.platform,
     status: webtoon.status,
     statusName: webtoon.statusName,
     originalUrl: webtoon.originalUrl,
@@ -132,7 +142,7 @@ function toAuthHeader(session: AuthSession): string {
   return `${session.tokenType} ${session.token}`;
 }
 
-async function requestFavoriteApi<T>(session: AuthSession, path: string, init?: RequestInit): Promise<T> {
+async function fetchFavoriteApi<T>(session: AuthSession, path: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
   headers.set("Authorization", toAuthHeader(session));
 
@@ -146,6 +156,18 @@ async function requestFavoriteApi<T>(session: AuthSession, path: string, init?: 
     payload = (await response.json()) as ApiResponse<T>;
   } catch {
     payload = null;
+  }
+
+  return { response, payload };
+}
+
+async function requestFavoriteApi<T>(session: AuthSession, path: string, init?: RequestInit): Promise<T> {
+  let { response, payload } = await fetchFavoriteApi<T>(session, path, init);
+  if (response.status === 401) {
+    const refreshedSession = await refreshAuthSession();
+    if (refreshedSession) {
+      ({ response, payload } = await fetchFavoriteApi<T>(refreshedSession, path, init));
+    }
   }
 
   if (!response.ok || !payload?.success) {

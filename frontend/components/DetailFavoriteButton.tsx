@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { type MouseEvent, useEffect, useState } from "react";
-import { AUTH_SESSION_CHANGED_EVENT, AuthSession, clearAuthSession, readAuthSession } from "@/lib/auth-client";
+import { AUTH_SESSION_CHANGED_EVENT, AuthSession, clearAuthSession, getAuthSession, readAuthSession } from "@/lib/auth-client";
 import {
   FAVORITES_CHANGED_EVENT,
   FavoriteApiError,
@@ -23,17 +23,26 @@ export function DetailFavoriteButton({ webtoon }: Props) {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
+    let active = true;
+
     function syncFavoriteAndAuthState() {
       setSession(readAuthSession());
       setIsFavorite(isFavoriteWebtoonById(webtoon.id));
     }
 
     syncFavoriteAndAuthState();
+    getAuthSession().then((nextSession) => {
+      if (active) {
+        setSession(nextSession);
+        setIsFavorite(isFavoriteWebtoonById(webtoon.id));
+      }
+    });
     window.addEventListener("storage", syncFavoriteAndAuthState);
     window.addEventListener(AUTH_SESSION_CHANGED_EVENT, syncFavoriteAndAuthState as EventListener);
     window.addEventListener(FAVORITES_CHANGED_EVENT, syncFavoriteAndAuthState as EventListener);
 
     return () => {
+      active = false;
       window.removeEventListener("storage", syncFavoriteAndAuthState);
       window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, syncFavoriteAndAuthState as EventListener);
       window.removeEventListener(FAVORITES_CHANGED_EVENT, syncFavoriteAndAuthState as EventListener);
@@ -47,15 +56,17 @@ export function DetailFavoriteButton({ webtoon }: Props) {
       return;
     }
 
-    if (!session) {
+    const activeSession = session ?? await getAuthSession();
+    if (!activeSession) {
       const nextPath = encodeURIComponent(pathname || `/webtoons/${webtoon.id}`);
       router.push(`/login?next=${nextPath}`);
       return;
     }
+    setSession(activeSession);
 
     setIsSaving(true);
     try {
-      const result = await toggleFavoriteWebtoonRemote(session, webtoon);
+      const result = await toggleFavoriteWebtoonRemote(activeSession, webtoon);
       setIsFavorite(result.favorited);
     } catch (error) {
       if (error instanceof FavoriteApiError && error.status === 401) {
